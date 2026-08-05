@@ -18,7 +18,7 @@ import {
 
 // ---- constants -------------------------------------------------------
 
-const MM_TO_PX = 7; // canvas scale
+const MM_TO_PX = 3.7795; // 96 DPI: 1mm = 96/25.4 px
 const LAYERS = [
   { key: "topSilk", label: "Top Silk", swatch: "#ececeb" },
   { key: "topCopper", label: "Top Cu", swatch: "#d79a52" },
