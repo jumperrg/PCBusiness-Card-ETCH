@@ -33,7 +33,7 @@ const BOARD_COLORS = [
   { key: "white",  label: "White",  fill: "#d8d9d5", dot: "#a8aaa6" },
   { key: "blue",   label: "Blue",   fill: "#0d1a2e", dot: "#1a3a6b" },
   { key: "red",    label: "Red",    fill: "#2e0d0d", dot: "#6b1a1a" },
-  { key: "yellow", label: "Yellow", fill: "#2a2400", dot: "#5a4e00" },
+  { key: "yellow", label: "Yellow", fill: "#FDE11C", dot: "#5a4e00" },
   { key: "purple", label: "Purple", fill: "#1a0d2e", dot: "#3d1a6b" },
 ];
 
@@ -64,7 +64,7 @@ export default function PCBCardEditor() {
   const [board, setBoard] = useState({ width: 85, height: 54, corner: 3 });
   const [elements, setElements] = useState([]);
   const [tool, setTool] = useState("select");
-  const [activeLayer, setActiveLayer] = useState("top"); // top | bottom
+  const [activeLayer, setActiveLayer] = useState("top");
   const [layerVis, setLayerVis] = useState({
     topSilk: true,
     topCopper: true,
@@ -78,16 +78,20 @@ export default function PCBCardEditor() {
   const [dragging, setDragging] = useState(null); // { id, startMouseMM, startPoints }
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [panDrag, setPanDrag] = useState(null); // { startX, startY, origX, origY }
-  const [gridSize, setGridSize] = useState(1.27); // mm — standard pad pitch (2.54 or 1.27)
+  const [gridSize, setGridSize] = useState(2.54);
   const [snapEnabled, setSnapEnabled] = useState(true);
   const [boardColorKey, setBoardColorKey] = useState("green");
   const boardColor = BOARD_COLORS.find((c) => c.key === boardColorKey)!;
   const svgRef = useRef(null);
+  const svgBackRef = useRef(null);
   const canvasWrapRef = useRef(null);
 
   const marginMM = 10;
   const gapMM = 1; // vertical margin between the two cards (in mm)
   const viewW = board.width + marginMM * 2;
+  // offset so dots are symmetric: half the leftover space on each side
+  const dotOffsetX = (board.width % gridSize) / 2;
+  const dotOffsetY = (board.height % gridSize) / 2;
   // front: full top margin, only gapMM at bottom
   const frontViewH = board.height + marginMM + gapMM;
   // back: only gapMM at top, full bottom margin
@@ -111,10 +115,24 @@ export default function PCBCardEditor() {
     [viewW, frontViewH]
   );
 
+  const clientToMMBack = useCallback(
+    (clientX, clientY) => {
+      const svg = svgBackRef.current;
+      const rect = svg.getBoundingClientRect();
+      const scaleX = viewW / rect.width;
+      const scaleY = backViewH / rect.height;
+      const x = (clientX - rect.left) * scaleX - marginMM;
+      const y = (clientY - rect.top) * scaleY - gapMM;
+      // mirror X to match the scale(-1,1) transform on the back card
+      return { x: board.width - x, y };
+    },
+    [viewW, backViewH, board.width]
+  );
+
   // ---- grid snap helpers ----
 
-  const snap = (v) => (snapEnabled ? Math.round(v / gridSize) * gridSize : v);
-  const snapPt = (p) => ({ x: snap(p.x), y: snap(p.y) });
+  const snap = (v, offset: number) => snapEnabled ? Math.round((v - offset) / gridSize) * gridSize + offset : v;
+  const snapPt = (p) => ({ x: snap(p.x, dotOffsetX), y: snap(p.y, dotOffsetY) });
   const snapDelta = (d) => (snapEnabled ? Math.round(d / gridSize) * gridSize : d);
 
   // ---- element creation ----
@@ -225,7 +243,7 @@ export default function PCBCardEditor() {
         points: orig.points.map((p) => ({ x: p.x + dx, y: p.y + dy })),
       });
     } else {
-      updateElement(dragging.id, { x: snap(orig.x + dx), y: snap(orig.y + dy) });
+      updateElement(dragging.id, { x: snap(orig.x + dx, dotOffsetX), y: snap(orig.y + dy, dotOffsetY) });
     }
   };
 
@@ -242,7 +260,7 @@ export default function PCBCardEditor() {
   };
 
   const startPan = (e) => {
-    if (e.button !== 2) return;
+    if (e.button !== 1) return;
     e.preventDefault();
     setPanDrag({ startX: e.clientX, startY: e.clientY, origX: pan.x, origY: pan.y });
   };
@@ -267,6 +285,13 @@ export default function PCBCardEditor() {
     }
     if (e.key === "Escape") cancelDrawing();
     if (e.key === "Enter" && drawingPoints.length) finishDrawing();
+  };
+
+  const deleteElement = (e: React.MouseEvent, id: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setElements((prev) => prev.filter((el) => el.id !== id));
+    setSelectedId((s: string | null) => (s === id ? null : s));
   };
 
   // ---- rendering helpers ----
@@ -415,15 +440,6 @@ export default function PCBCardEditor() {
               {g}mm
             </button>
           ))}
-          <span className="mx-1" style={{ color: "#34373b" }}>|</span>
-          ACTIVE LAYER
-          <button
-            onClick={() => setActiveLayer((a) => (a === "top" ? "bottom" : "top"))}
-            className="ml-1 px-2 py-1 rounded font-mono text-[10px]"
-            style={{ background: "#2c2f33", color: "#e3a869" }}
-          >
-            {activeLayer === "top" ? "TOP" : "BOTTOM"}
-          </button>
         </div>
       </div>
 
@@ -469,6 +485,23 @@ export default function PCBCardEditor() {
               e.target.value = "";
             }}
           />
+          {["pad-smd", "text", "image", "trace"].includes(tool) && (
+            <div className="mt-2 flex flex-col gap-1">
+              {["top", "bottom"].map((l) => (
+                <button
+                  key={l}
+                  onClick={() => setActiveLayer(l)}
+                  className="w-9 h-6 flex items-center justify-center rounded font-mono text-[9px] tracking-wide transition"
+                  style={{
+                    background: activeLayer === l ? "#d79a52" : "#2c2f33",
+                    color: activeLayer === l ? "#14201a" : "#6b6e71",
+                  }}
+                >
+                  {l === "top" ? "TOP" : "BOT"}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Canvas */}
@@ -514,7 +547,7 @@ export default function PCBCardEditor() {
                   <stop offset="0%" stopColor="#9ba3a8" stopOpacity="0.5" />
                   <stop offset="100%" stopColor="#3a3d40" stopOpacity="0.5" />
                 </linearGradient>
-                <pattern id="dotGrid" x="0" y="0" width={gridSize} height={gridSize} patternUnits="userSpaceOnUse">
+                <pattern id="dotGrid" x={dotOffsetX} y={dotOffsetY} width={gridSize} height={gridSize} patternUnits="userSpaceOnUse">
                   <circle cx={0} cy={0} r={0.24} fill={boardColor.dot} />
                 </pattern>
                 <clipPath id="boardClip">
@@ -566,17 +599,47 @@ export default function PCBCardEditor() {
           {/* ── BACK (bottom) — mirrored horizontally ── */}
           <div style={{ transform: `translate(${pan.x}px, ${pan.y}px)` }}>
             <svg
+              ref={svgBackRef}
               viewBox={`0 0 ${viewW} ${backViewH}`}
               width={viewW * MM_TO_PX * zoom}
               height={backViewH * MM_TO_PX * zoom}
-              style={{ display: "block" }}
+              style={{ display: "block", cursor: tool === "select" ? "default" : "crosshair" }}
+              onClick={(e) => {
+                if (dragging) return;
+                const raw = clientToMMBack(e.clientX, e.clientY);
+                const pt = clampToBoard(snapPt(raw));
+                if (tool === "pad-tht") {
+                  addElement({ type: "pad", kind: "tht", layer: "both", x: pt.x, y: pt.y, size: 1.6, drill: 0.8 });
+                } else if (tool === "pad-smd") {
+                  addElement({ type: "pad", kind: "smd", layer: "bottom", x: pt.x, y: pt.y, shape: "rect", w: 1.6, h: 1.2 });
+                } else if (tool === "hole") {
+                  addElement({ type: "hole", x: pt.x, y: pt.y, diameter: 3, plated: false });
+                } else if (tool === "text") {
+                  addElement({ type: "text", layer: "bottom", x: pt.x, y: pt.y, content: "TEXT", font: "sans", size: 4 });
+                } else if (tool === "select") {
+                  setSelectedId(null);
+                }
+              }}
+              onPointerMove={(e) => {
+                if (!dragging) return;
+                const pt = clientToMMBack(e.clientX, e.clientY);
+                const dx = snapDelta(pt.x - dragging.start.x);
+                const dy = snapDelta(pt.y - dragging.start.y);
+                const orig = dragging.orig;
+                if (orig.type === "trace" || orig.type === "cutout") {
+                  updateElement(dragging.id, { points: orig.points.map((p: {x:number,y:number}) => ({ x: p.x + dx, y: p.y + dy })) });
+                } else {
+                  updateElement(dragging.id, { x: snap(orig.x + dx, dotOffsetX), y: snap(orig.y + dy, dotOffsetY) });
+                }
+              }}
+              onPointerUp={onPointerUp}
             >
               <defs>
                 <linearGradient id="copperEdgeBack" x1="0" y1="0" x2="1" y2="1">
                   <stop offset="0%" stopColor="#9ba3a8" stopOpacity="0.5" />
                   <stop offset="100%" stopColor="#3a3d40" stopOpacity="0.5" />
                 </linearGradient>
-                <pattern id="dotGridBack" x="0" y="0" width={gridSize} height={gridSize} patternUnits="userSpaceOnUse">
+                <pattern id="dotGridBack" x={dotOffsetX} y={dotOffsetY} width={gridSize} height={gridSize} patternUnits="userSpaceOnUse">
                   <circle cx={0} cy={0} r={0.24} fill={boardColor.dot} />
                 </pattern>
                 <clipPath id="boardClipBack">
@@ -665,10 +728,11 @@ export default function PCBCardEditor() {
   function renderElement(el, pass) {
     const isSelected = el.id === selectedId;
     const strokeSel = isSelected ? { stroke: "#9ba3a8", strokeWidth: 0.15, strokeDasharray: "0.4 0.3" } : {};
+    const onRMB = (e) => deleteElement(e, el.id);
 
     if (el.type === "trace") {
       return (
-        <g key={el.id} onPointerDown={(e) => startDrag(e, el)} style={{ cursor: "move" }}>
+        <g key={el.id} onPointerDown={(e) => startDrag(e, el)} onContextMenu={onRMB} style={{ cursor: "move" }}>
           <path
             d={cuPath(el.points, false)}
             fill="none"
@@ -687,7 +751,7 @@ export default function PCBCardEditor() {
     if (el.type === "pad") {
       const fill = layerColor(el.layer === "both" ? "top" : el.layer, "copper");
       return (
-        <g key={el.id} onPointerDown={(e) => startDrag(e, el)} style={{ cursor: "move" }}>
+        <g key={el.id} onPointerDown={(e) => startDrag(e, el)} onContextMenu={onRMB} style={{ cursor: "move" }}>
           {el.kind === "tht" ? (
             <>
               <circle cx={el.x} cy={el.y} r={el.size / 2} fill={fill} {...strokeSel} />
@@ -710,6 +774,7 @@ export default function PCBCardEditor() {
           fontFamily={font.css}
           fill={layerColor(el.layer, "silk")}
           onPointerDown={(e) => startDrag(e, el)}
+          onContextMenu={onRMB}
           style={{ cursor: "move", ...(isSelected ? { paintOrder: "stroke", stroke: "#9ba3a8", strokeWidth: 0.15 } : {}) }}
         >
           {el.content}
@@ -726,6 +791,7 @@ export default function PCBCardEditor() {
           width={el.w}
           height={el.h}
           onPointerDown={(e) => startDrag(e, el)}
+          onContextMenu={onRMB}
           style={{ cursor: "move" }}
           opacity={0.92}
         />
@@ -733,7 +799,7 @@ export default function PCBCardEditor() {
     }
     if (el.type === "hole") {
       return (
-        <g key={el.id} onPointerDown={(e) => startDrag(e, el)} style={{ cursor: "move" }}>
+        <g key={el.id} onPointerDown={(e) => startDrag(e, el)} onContextMenu={onRMB} style={{ cursor: "move" }}>
           <circle cx={el.x} cy={el.y} r={el.diameter / 2} fill="#18191b" stroke={el.plated ? "#e3a869" : "#6b6e71"}
             strokeWidth={0.25} {...strokeSel} />
         </g>
@@ -748,6 +814,7 @@ export default function PCBCardEditor() {
           stroke={isSelected ? "#9ba3a8" : "#6b6e71"}
           strokeWidth={0.2}
           onPointerDown={(e) => startDrag(e, el)}
+          onContextMenu={onRMB}
           style={{ cursor: "move" }}
         />
       );
