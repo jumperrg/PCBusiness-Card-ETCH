@@ -11,6 +11,8 @@ import {
   Scissors,
   Download,
   Trash2,
+  FolderOpen,
+  Save,
 } from "lucide-react";
 
 // ---- constants -------------------------------------------------------
@@ -82,6 +84,7 @@ export default function PCBCardEditor() {
 
   const marginMM = 10;
   const gapMM = 1; // vertical margin between the two cards (in mm)
+  const dotInset = 2; // mm inset from board edge to first dot row/col
   const viewW = board.width + marginMM * 2;
   // offset so dots are symmetric: half the leftover space on each side
   const dotOffsetX = (board.width % gridSize) / 2;
@@ -133,8 +136,15 @@ export default function PCBCardEditor() {
     const dy = pt.y - from.y;
     const angle = Math.atan2(dy, dx);
     const snap45 = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4);
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    return { x: from.x + dist * Math.cos(snap45), y: from.y + dist * Math.sin(snap45) };
+    const cos45 = Math.cos(snap45);
+    const sin45 = Math.sin(snap45);
+    // project cursor onto the locked axis, then snap distance to grid
+    const rawDist = dx * cos45 + dy * sin45;
+    // for diagonal axes (45°) the grid step along the axis is gridSize*sqrt(2)
+    const isDiag = Math.abs(Math.round(snap45 / (Math.PI / 4)) % 2) === 1;
+    const axisStep = isDiag ? gridSize * Math.SQRT2 : gridSize;
+    const snappedDist = snapEnabled ? Math.round(rawDist / axisStep) * axisStep : rawDist;
+    return { x: from.x + snappedDist * cos45, y: from.y + snappedDist * sin45 };
   };
 
   // ---- element creation ----
@@ -163,6 +173,19 @@ export default function PCBCardEditor() {
   });
 
   const PAD_SNAP_RADIUS = 2; // mm — snap to pad center if within this distance
+  const PAD_COLLISION_RADIUS = 0.5; // mm — block new pad if an existing pad center is within this distance
+
+  const padCollides = (pt: { x: number; y: number }, layer: string) => {
+    return elements.some((e) => {
+      if (e.type !== "pad") return false;
+      // THT collides with everything; SMD only collides on same layer
+      const layerMatch = e.layer === "both" || layer === "both" || e.layer === layer;
+      if (!layerMatch) return false;
+      const dx = pt.x - e.x;
+      const dy = pt.y - e.y;
+      return Math.sqrt(dx * dx + dy * dy) < PAD_COLLISION_RADIUS;
+    });
+  };
 
   const snapToPad = (pt: { x: number; y: number }, layer: string) => {
     const pads = elements.filter(
@@ -181,8 +204,9 @@ export default function PCBCardEditor() {
   const handleCanvasClick = (e) => {
     if (dragging) return;
     const raw = clientToMM(e.clientX, e.clientY);
-    if (raw.x < 0 || raw.x > board.width || raw.y < 0 || raw.y > board.height) return;
-    const pt = clampToBoard(snapPt(raw));
+    const snapped = snapPt(raw);
+    if (snapped.x < dotInset || snapped.x > board.width - dotInset || snapped.y < dotInset || snapped.y > board.height - dotInset) return;
+    const pt = snapped;
 
     if (tool === "select") {
       setSelectedId(null);
@@ -190,19 +214,18 @@ export default function PCBCardEditor() {
     }
     if (tool === "trace" || tool === "cutout") {
       const layer = drawingPoints.length === 0 ? (drawingLayerRef.current = "top", "top") : drawingLayerRef.current;
-      const { pt: snapped, padId } = snapToPad(pt, layer);
-      const ortho = orthoMode && drawingPoints.length > 0 ? snapOrtho(snapped, drawingPoints[drawingPoints.length - 1]) : snapped;
-      const finalPt = clampToBoard(ortho);
-      setDrawingPoints((prev) => [...prev, finalPt]);
+      const { pt: padSnapped, padId } = snapToPad(pt, layer);
+      const ortho = orthoMode && drawingPoints.length > 0 ? snapOrtho(padSnapped, drawingPoints[drawingPoints.length - 1]) : padSnapped;
+      setDrawingPoints((prev) => [...prev, ortho]);
       if (padId) setDrawingConnections((prev) => [...prev, { pointIndex: drawingPoints.length, padId }]);
       return;
     }
     if (tool === "pad-tht") {
-      addElement({ type: "pad", kind: "tht", layer: "both", x: pt.x, y: pt.y, size: 1.6, drill: 0.8 });
+      if (!padCollides(pt, "both")) addElement({ type: "pad", kind: "tht", layer: "both", x: pt.x, y: pt.y, size: 1.6, drill: 0.8 });
       return;
     }
     if (tool === "pad-smd") {
-      addElement({ type: "pad", kind: "smd", layer: activeLayer, x: pt.x, y: pt.y, shape: "rect", w: 1.6, h: 1.2 });
+      if (!padCollides(pt, activeLayer)) addElement({ type: "pad", kind: "smd", layer: activeLayer, x: pt.x, y: pt.y, shape: "rect", w: 1.6, h: 1.2 });
       return;
     }
     if (tool === "text") {
@@ -335,6 +358,35 @@ export default function PCBCardEditor() {
     if (e.key === "Enter" && drawingPoints.length) finishDrawing();
   };
 
+  const exportProject = () => {
+    const data = JSON.stringify({ version: 1, board, boardColorKey, elements }, null, 2);
+    const blob = new Blob([data], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "project.pcb.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importProject = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result as string);
+        if (parsed.board) setBoard(parsed.board);
+        if (parsed.boardColorKey) setBoardColorKey(parsed.boardColorKey);
+        if (Array.isArray(parsed.elements)) {
+          setElements(parsed.elements);
+          setSelectedId(null);
+        }
+      } catch {
+        alert("Invalid project file.");
+      }
+    };
+    reader.readAsText(file);
+  };
+
   const deleteElement = (e: React.MouseEvent, id: string) => {
     e.preventDefault();
     e.stopPropagation();
@@ -377,13 +429,36 @@ export default function PCBCardEditor() {
           </span>
         </div>
 
-        <button
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded font-mono text-[15px] tracking-wide"
-          style={{ background: UI.accent, color: UI.accentText }}
-        >
-          <Download size={13} strokeWidth={2.5} />
-          EXPORT GERBER
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={exportProject}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded font-mono text-[15px] tracking-wide"
+            style={{ background: UI.bgChipOn, color: UI.textMuted, border: `1px solid ${UI.borderSub}` }}
+          >
+            <Save size={13} strokeWidth={2.5} />
+            SAVE JSON
+          </button>
+          <label
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded font-mono text-[15px] tracking-wide cursor-pointer"
+            style={{ background: UI.bgChipOn, color: UI.textMuted, border: `1px solid ${UI.borderSub}` }}
+          >
+            <FolderOpen size={13} strokeWidth={2.5} />
+            LOAD JSON
+            <input
+              type="file"
+              accept=".json"
+              className="hidden"
+              onChange={(e) => { if (e.target.files?.[0]) { importProject(e.target.files[0]); e.target.value = ""; } }}
+            />
+          </label>
+          <button
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded font-mono text-[15px] tracking-wide"
+            style={{ background: UI.accent, color: UI.accentText }}
+          >
+            <Download size={13} strokeWidth={2.5} />
+            EXPORT GERBER
+          </button>
+        </div>
       </div>
 
 
@@ -562,8 +637,11 @@ export default function PCBCardEditor() {
                     fill={boardColor.fill} {...boardBorder} />
                 )}
                 {/* dot grid clipped to board shape */}
-                {showDots && <rect x={2} y={2} width={board.width - 4} height={board.height - 4}
+                {showDots && <rect x={dotInset} y={dotInset} width={board.width - dotInset * 2} height={board.height - dotInset * 2}
                   fill="url(#dotGrid)" clipPath="url(#boardClip)" />}
+                {/* placement boundary overlay */}
+                <rect x={0} y={0} width={board.width} height={board.height} rx={board.corner} ry={board.corner}
+                  fill="none" stroke="#ffffff18" strokeWidth={0.4} strokeDasharray="1.5 1" vectorEffect="non-scaling-stroke" />
 
                 {/* top copper */}
                 {layerVis.topCopper &&
@@ -617,19 +695,19 @@ export default function PCBCardEditor() {
               onClick={(e) => {
                 if (dragging) return;
                 const raw = clientToMMBack(e.clientX, e.clientY);
-                if (raw.x < 0 || raw.x > board.width || raw.y < 0 || raw.y > board.height) return;
-                const pt = clampToBoard(snapPt(raw));
+                const snappedBack = snapPt(raw);
+                if (snappedBack.x < dotInset || snappedBack.x > board.width - dotInset || snappedBack.y < dotInset || snappedBack.y > board.height - dotInset) return;
+                const pt = snappedBack;
                 if (tool === "trace" || tool === "cutout") {
                   if (drawingPoints.length === 0) drawingLayerRef.current = "bottom";
-                  const { pt: snapped, padId } = snapToPad(pt, "bottom");
-                  const ortho = orthoMode && drawingPoints.length > 0 ? snapOrtho(snapped, drawingPoints[drawingPoints.length - 1]) : snapped;
-                  const finalPt = clampToBoard(ortho);
-                  setDrawingPoints((prev) => [...prev, finalPt]);
+                  const { pt: padSnappedBack, padId } = snapToPad(pt, "bottom");
+                  const ortho = orthoMode && drawingPoints.length > 0 ? snapOrtho(padSnappedBack, drawingPoints[drawingPoints.length - 1]) : padSnappedBack;
+                  setDrawingPoints((prev) => [...prev, ortho]);
                   setDrawingConnections((prev) => padId ? [...prev, { pointIndex: drawingPoints.length, padId }] : prev);
                 } else if (tool === "pad-tht") {
-                  addElement({ type: "pad", kind: "tht", layer: "both", x: pt.x, y: pt.y, size: 1.6, drill: 0.8 });
+                  if (!padCollides(pt, "both")) addElement({ type: "pad", kind: "tht", layer: "both", x: pt.x, y: pt.y, size: 1.6, drill: 0.8 });
                 } else if (tool === "pad-smd") {
-                  addElement({ type: "pad", kind: "smd", layer: "bottom", x: pt.x, y: pt.y, shape: "rect", w: 1.6, h: 1.2 });
+                  if (!padCollides(pt, "bottom")) addElement({ type: "pad", kind: "smd", layer: "bottom", x: pt.x, y: pt.y, shape: "rect", w: 1.6, h: 1.2 });
                 } else if (tool === "hole") {
                   addElement({ type: "hole", x: pt.x, y: pt.y, diameter: 3, plated: false });
                 } else if (tool === "text") {
@@ -692,15 +770,21 @@ export default function PCBCardEditor() {
                     fill={boardColor.fill} {...boardBorder} />
                 )}
                 {/* dot grid */}
-                {showDots && <rect x={2} y={2} width={board.width - 4} height={board.height - 4}
+                {showDots && <rect x={dotInset} y={dotInset} width={board.width - dotInset * 2} height={board.height - dotInset * 2}
                   fill="url(#dotGridBack)" clipPath="url(#boardClipBack)" />}
+                {/* placement boundary overlay */}
+                <rect x={0} y={0} width={board.width} height={board.height} rx={board.corner} ry={board.corner}
+                  fill="none" stroke="#ffffff18" strokeWidth={0.4} strokeDasharray="1.5 1" vectorEffect="non-scaling-stroke" />
 
-                {/* bottom copper traces (no mirror) */}
-                {layerVis.bottomCopper &&
-                  elements
-                    .filter((e) => e.layer === "bottom" || e.layer === "both")
-                    .filter((e) => e.type === "trace")
-                    .map((e) => renderElement(e, "copper", true))}
+                {/* bottom copper traces — mirrored to match stored coordinates */}
+                {layerVis.bottomCopper && (
+                  <g transform={`scale(-1,1) translate(${-board.width}, 0)`}>
+                    {elements
+                      .filter((e) => e.layer === "bottom" || e.layer === "both")
+                      .filter((e) => e.type === "trace")
+                      .map((e) => renderElement(e, "copper", true))}
+                  </g>
+                )}
 
                 {/* bottom silk */}
                 {layerVis.bottomSilk &&
@@ -714,7 +798,7 @@ export default function PCBCardEditor() {
 
                 {/* in-progress drawing on back canvas */}
                 {drawingPoints.length > 0 && drawingLayerRef.current === "bottom" && (
-                  <>
+                  <g transform={`scale(-1,1) translate(${-board.width}, 0)`}>
                     <path d={cuPath(drawingPoints, false)} fill="none" stroke={boardColor.copper}
                       strokeWidth={tool === "trace" ? 0.3 : 0.15}
                       strokeDasharray={tool === "cutout" ? "0.6 0.4" : undefined} />
@@ -729,7 +813,7 @@ export default function PCBCardEditor() {
                     {drawingPoints.map((p, i) => (
                       <circle key={i} cx={p.x} cy={p.y} r={0.4} fill="#9ba3a8" />
                     ))}
-                  </>
+                  </g>
                 )}
               </g>
 
