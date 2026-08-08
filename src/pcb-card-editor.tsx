@@ -1,4 +1,5 @@
-import React, { useState, useRef, useCallback } from "react";
+﻿import React, { useState, useRef, useCallback } from "react";
+import { UI, BOARD_COLORS } from "./colors";
 import {
   MousePointer2,
   Spline,
@@ -8,33 +9,19 @@ import {
   Image as ImageIcon,
   CircleDashed,
   Scissors,
-  ZoomIn,
-  ZoomOut,
   Download,
   Trash2,
-  Check,
-  X as XIcon,
 } from "lucide-react";
 
 // ---- constants -------------------------------------------------------
 
 const MM_TO_PX = 3.7795; // 96 DPI: 1mm = 96/25.4 px
 const LAYERS = [
-  { key: "topSilk", label: "Top Silk", swatch: "#ececeb" },
-  { key: "topCopper", label: "Top Cu", swatch: "#d79a52" },
-  { key: "bottomCopper", label: "Bot Cu", swatch: "#b9863f" },
-  { key: "bottomSilk", label: "Bot Silk", swatch: "#c9cacb" },
-  { key: "outline", label: "Outline", swatch: "#9ba3a8" },
-];
-
-const BOARD_COLORS = [
-  { key: "green",  label: "Green",  fill: "#1a2e1a", dot: "#2d5a2d" },
-  { key: "black",  label: "Black",  fill: "#111214", dot: "#2a2d31" },
-  { key: "white",  label: "White",  fill: "#d8d9d5", dot: "#a8aaa6" },
-  { key: "blue",   label: "Blue",   fill: "#0d1a2e", dot: "#1a3a6b" },
-  { key: "red",    label: "Red",    fill: "#2e0d0d", dot: "#6b1a1a" },
-  { key: "yellow", label: "Yellow", fill: "#FDE11C", dot: "#5a4e00" },
-  { key: "purple", label: "Purple", fill: "#1a0d2e", dot: "#3d1a6b" },
+  { key: "topSilk", label: "Top Silk", swatch: "#f0f0e8" },
+  { key: "topCopper", label: "Top Cu", swatch: "#c8922a" },
+  { key: "bottomCopper", label: "Bot Cu", swatch: "#a87820" },
+  { key: "bottomSilk", label: "Bot Silk", swatch: "#d8d8d0" },
+  { key: "outline", label: "Outline", swatch: "#8a9298" },
 ];
 
 const FONTS = [
@@ -55,7 +42,7 @@ const TOOLS = [
   { key: "cutout", label: "Cutout", icon: Scissors },
 ];
 
-let uidCounter = 1;
+let uidCounter = Date.now();
 const uid = () => `el_${uidCounter++}`;
 
 // ---- component ---------------------------------------------------------
@@ -65,6 +52,7 @@ export default function PCBCardEditor() {
   const [elements, setElements] = useState([]);
   const [tool, setTool] = useState("select");
   const [activeLayer, setActiveLayer] = useState("top");
+  const [layersOpen, setLayersOpen] = useState(true);
   const [layerVis, setLayerVis] = useState({
     topSilk: true,
     topCopper: true,
@@ -74,14 +62,19 @@ export default function PCBCardEditor() {
   });
   const [selectedId, setSelectedId] = useState(null);
   const [drawingPoints, setDrawingPoints] = useState([]);
-  const [zoom, setZoom] = useState(1);
+  const [cursorPt, setCursorPt] = useState<{x:number,y:number}|null>(null);
+  const drawingLayerRef = useRef("top");
+  const [drawingConnections, setDrawingConnections] = useState<{pointIndex:number,padId:string}[]>([]);
+  const [zoom, setZoom] = useState(1.75);
   const [dragging, setDragging] = useState(null); // { id, startMouseMM, startPoints }
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [panDrag, setPanDrag] = useState(null); // { startX, startY, origX, origY }
   const [gridSize, setGridSize] = useState(2.54);
   const [snapEnabled, setSnapEnabled] = useState(true);
+  const [showDots, setShowDots] = useState(true);
   const [boardColorKey, setBoardColorKey] = useState("green");
   const boardColor = BOARD_COLORS.find((c) => c.key === boardColorKey)!;
+  const boardBorder = { stroke: "#ffffff60", strokeWidth: 2, vectorEffect: "non-scaling-stroke" } as const;
   const svgRef = useRef(null);
   const svgBackRef = useRef(null);
   const canvasWrapRef = useRef(null);
@@ -160,9 +153,26 @@ export default function PCBCardEditor() {
     y: Math.min(Math.max(p.y, 0), board.height),
   });
 
+  const PAD_SNAP_RADIUS = 2; // mm — snap to pad center if within this distance
+
+  const snapToPad = (pt: { x: number; y: number }, layer: string) => {
+    const pads = elements.filter(
+      (e) => e.type === "pad" && (e.layer === layer || e.layer === "both")
+    );
+    for (const pad of pads) {
+      const dx = pt.x - pad.x;
+      const dy = pt.y - pad.y;
+      if (Math.sqrt(dx * dx + dy * dy) <= PAD_SNAP_RADIUS) {
+        return { pt: { x: pad.x, y: pad.y }, padId: pad.id };
+      }
+    }
+    return { pt, padId: null };
+  };
+
   const handleCanvasClick = (e) => {
     if (dragging) return;
     const raw = clientToMM(e.clientX, e.clientY);
+    if (raw.x < 0 || raw.x > board.width || raw.y < 0 || raw.y > board.height) return;
     const pt = clampToBoard(snapPt(raw));
 
     if (tool === "select") {
@@ -170,7 +180,10 @@ export default function PCBCardEditor() {
       return;
     }
     if (tool === "trace" || tool === "cutout") {
-      setDrawingPoints((prev) => [...prev, pt]);
+      const layer = drawingPoints.length === 0 ? (drawingLayerRef.current = "top", "top") : drawingLayerRef.current;
+      const { pt: snapped, padId } = snapToPad(pt, layer);
+      setDrawingPoints((prev) => [...prev, snapped]);
+      if (padId) setDrawingConnections((prev) => [...prev, { pointIndex: drawingPoints.length, padId }]);
       return;
     }
     if (tool === "pad-tht") {
@@ -193,16 +206,20 @@ export default function PCBCardEditor() {
 
   const finishDrawing = () => {
     if (tool === "trace" && drawingPoints.length >= 2) {
-      addElement({ type: "trace", layer: activeLayer, points: drawingPoints, width: 0.3 });
+      addElement({ type: "trace", layer: drawingLayerRef.current, points: drawingPoints, width: 0.3, connections: drawingConnections });
     } else if (tool === "cutout" && drawingPoints.length >= 3) {
       addElement({ type: "cutout", points: drawingPoints });
     }
     setDrawingPoints([]);
+    setDrawingConnections([]);
+    setCursorPt(null);
     setTool("select");
   };
 
   const cancelDrawing = () => {
     setDrawingPoints([]);
+    setDrawingConnections([]);
+    setCursorPt(null);
   };
 
   const handleImageFile = (file) => {
@@ -223,18 +240,19 @@ export default function PCBCardEditor() {
 
   // ---- dragging existing elements ----
 
-  const startDrag = (e, el) => {
+  const startDrag = (e, el, back = false) => {
     if (tool !== "select") return;
     if (e.button !== 0) return;
-    e.stopPropagation();
+    if (e.button === 0) e.stopPropagation();
     setSelectedId(el.id);
-    const pt = clientToMM(e.clientX, e.clientY);
-    setDragging({ id: el.id, start: pt, orig: el });
+    const pt = back ? clientToMMBack(e.clientX, e.clientY) : clientToMM(e.clientX, e.clientY);
+    setDragging({ id: el.id, start: pt, orig: el, back });
   };
 
   const onPointerMove = (e) => {
-    if (!dragging) return;
     const pt = clientToMM(e.clientX, e.clientY);
+    if (drawingPoints.length > 0 && drawingLayerRef.current === "top") setCursorPt(snapPt(pt));
+    if (!dragging || dragging.back) return;
     const dx = snapDelta(pt.x - dragging.start.x);
     const dy = snapDelta(pt.y - dragging.start.y);
     const orig = dragging.orig;
@@ -243,7 +261,23 @@ export default function PCBCardEditor() {
         points: orig.points.map((p) => ({ x: p.x + dx, y: p.y + dy })),
       });
     } else {
-      updateElement(dragging.id, { x: snap(orig.x + dx, dotOffsetX), y: snap(orig.y + dy, dotOffsetY) });
+      const { x: newX, y: newY } = clampToBoard({ x: snap(orig.x + dx, dotOffsetX), y: snap(orig.y + dy, dotOffsetY) });
+      const ATTACH_EPS = 0.5;
+      setElements((prev) => {
+        const pad = prev.find((el) => el.id === dragging.id);
+        const padX = pad ? pad.x : orig.x;
+        const padY = pad ? pad.y : orig.y;
+        return prev.map((el) => {
+          if (el.id === dragging.id) return { ...el, x: newX, y: newY };
+          if (el.type !== "trace") return el;
+          const newPoints = el.points.map((p: any) => {
+            const dx2 = p.x - padX;
+            const dy2 = p.y - padY;
+            return Math.sqrt(dx2*dx2 + dy2*dy2) < ATTACH_EPS ? { x: newX, y: newY } : p;
+          });
+          return { ...el, points: newPoints };
+        });
+      });
     }
   };
 
@@ -300,101 +334,52 @@ export default function PCBCardEditor() {
     pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ") + (closed ? " Z" : "");
 
   const layerColor = (layer, kind) => {
-    if (kind === "silk") return layer === "top" ? "#ececeb" : "#c9cacb";
-    return layer === "top" ? "#e3a869" : "#c68a3d";
+    if (kind === "silk") return layer === "top" ? "#f0f0e8" : "#d8d8d0";
+    return boardColor.copper;
   };
 
   return (
     <div
-      className="w-full flex flex-col text-[13px]"
-      style={{ background: "#18191b", color: "#ececeb", fontFamily: "Arial, sans-serif", height: "100vh" }}
+      className="w-full flex flex-col text-[15px]"
+      style={{ background: UI.bgApp, color: UI.textPrimary, fontFamily: "Arial, sans-serif", height: "100vh" }}
       tabIndex={0}
       onKeyDown={onKeyDown}
     >
       {/* Header */}
       <div
         className="flex items-center justify-between px-4 py-2 border-b shrink-0"
-        style={{ borderColor: "#2c2f33", background: "#1c1e21" }}
+        style={{ borderColor: UI.border, background: UI.bgPanel }}
       >
         <div className="flex items-center gap-3">
           <div
             className="w-2.5 h-2.5 rounded-full"
-            style={{ background: "#9ba3a8", boxShadow: "0 0 8px #9ba3a8" }}
+            style={{ background: UI.textMuted, boxShadow: `0 0 8px ${UI.borderSub}` }}
           />
-          <span className="font-mono tracking-widest text-[11px]" style={{ color: "#a8abae" }}>
+          <span className="font-mono tracking-widest text-[15px]" style={{ color: UI.textMuted }}>
             ETCH
           </span>
-          <span className="text-[12px]" style={{ color: "#6b6e71" }}>
+          <span className="text-[14px]" style={{ color: UI.textFaint }}>
             / business-card.pcb
           </span>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1 font-mono text-[11px]" style={{ color: "#a8abae" }}>
-            <button
-              onClick={() => setZoom((z) => Math.max(0.5, +(z - 0.25).toFixed(2)))}
-              className="p-1 rounded hover:bg-white/5"
-            >
-              <ZoomOut size={14} />
-            </button>
-            <span className="w-10 text-center">{Math.round(zoom * 100)}%</span>
-            <button
-              onClick={() => setZoom((z) => Math.min(3, +(z + 0.25).toFixed(2)))}
-              className="p-1 rounded hover:bg-white/5"
-            >
-              <ZoomIn size={14} />
-            </button>
-            <button
-              onClick={() => {
-                setZoom(1);
-                setPan({ x: 0, y: 0 });
-              }}
-              className="ml-1 px-2 py-1 rounded hover:bg-white/5 text-[10px] tracking-wide"
-            >
-              RESET
-            </button>
-          </div>
-          <button
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded font-mono text-[11px] tracking-wide"
-            style={{ background: "#d79a52", color: "#14201a" }}
-          >
-            <Download size={13} strokeWidth={2.5} />
-            EXPORT GERBER
-          </button>
-        </div>
+        <button
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded font-mono text-[15px] tracking-wide"
+          style={{ background: UI.accent, color: UI.accentText }}
+        >
+          <Download size={13} strokeWidth={2.5} />
+          EXPORT GERBER
+        </button>
       </div>
 
-      {/* Layer chips */}
+
+      {/* Second bar: layers, PCB color, grid */}
       <div
         className="flex items-center gap-2 px-4 py-2 border-b overflow-x-auto shrink-0"
-        style={{ borderColor: "#2c2f33", background: "#1a1c1f" }}
+        style={{ borderColor: UI.border, background: UI.bgApp }}
       >
-        <span className="font-mono text-[10px] tracking-widest mr-1" style={{ color: "#6b6e71" }}>
-          LAYERS
-        </span>
-        {LAYERS.map((l) => {
-          const on = layerVis[l.key];
-          return (
-            <button
-              key={l.key}
-              onClick={() => setLayerVis((v) => ({ ...v, [l.key]: !v[l.key] }))}
-              className="flex items-center gap-1.5 px-2 py-1 rounded border font-mono text-[10px] tracking-wide transition"
-              style={{
-                borderColor: on ? l.swatch : "#34373b",
-                color: on ? "#ececeb" : "#6b6e71",
-                background: on ? "rgba(255,255,255,0.03)" : "transparent",
-              }}
-            >
-              <span
-                className="w-2.5 h-2.5 rounded-sm"
-                style={{ background: on ? l.swatch : "#34373b", boxShadow: on ? `0 0 5px ${l.swatch}` : "none" }}
-              />
-              {l.label}
-            </button>
-          );
-        })}
-        <div className="flex items-center gap-2 ml-4">
-          <span className="font-mono text-[10px] tracking-widest" style={{ color: "#6b6e71" }}>PCB</span>
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-[12px] tracking-widest" style={{ color: UI.textFaint }}>PCB</span>
           {BOARD_COLORS.map((c) => (
             <button
               key={c.key}
@@ -403,51 +388,56 @@ export default function PCBCardEditor() {
               className="w-5 h-5 rounded-sm border transition"
               style={{
                 background: c.fill,
-                borderColor: boardColorKey === c.key ? "#ececeb" : "#34373b",
-                boxShadow: boardColorKey === c.key ? `0 0 0 1px #ececeb` : "none",
+                borderColor: boardColorKey === c.key ? UI.accent : UI.borderSub,
+                boxShadow: boardColorKey === c.key ? `0 0 0 1px ${UI.accent}` : "none",
               }}
             />
           ))}
         </div>
-
-        <div className="ml-auto flex items-center gap-2 font-mono text-[10px]" style={{ color: "#6b6e71" }}>
+        <div className="ml-auto flex items-center gap-2 font-mono text-[12px]" style={{ color: UI.textFaint }}>
           <span>GRID</span>
+          <button
+            onClick={() => setShowDots((s) => !s)}
+            className="px-2 py-1 rounded"
+            style={{
+              background: showDots ? UI.bgChipOn : "transparent",
+              color: showDots ? UI.accent : UI.textFaint,
+              border: `1px solid ${UI.borderSub}`,
+            }}
+          >{showDots ? "DOTS ON" : "DOTS OFF"}</button>
           <button
             onClick={() => setSnapEnabled((s) => !s)}
             className="px-2 py-1 rounded"
             style={{
-              background: snapEnabled ? "#2c2f33" : "transparent",
-              color: snapEnabled ? "#e3a869" : "#6b6e71",
-              border: "1px solid #34373b",
+              background: snapEnabled ? UI.bgChipOn : "transparent",
+              color: snapEnabled ? UI.accent : UI.textFaint,
+              border: `1px solid ${UI.borderSub}`,
             }}
-          >
-            {snapEnabled ? "SNAP ON" : "SNAP OFF"}
-          </button>
+          >{snapEnabled ? "SNAP ON" : "SNAP OFF"}</button>
           {[2.54, 1.27].map((g) => (
             <button
               key={g}
-              onClick={() => {
-                setGridSize(g);
-                setSnapEnabled(true);
-              }}
+              onClick={() => { setGridSize(g); setSnapEnabled(true); }}
               className="px-2 py-1 rounded"
               style={{
-                background: snapEnabled && gridSize === g ? "#d79a52" : "transparent",
-                color: snapEnabled && gridSize === g ? "#14201a" : "#6b6e71",
-                border: "1px solid #34373b",
+                background: snapEnabled && gridSize === g ? UI.accent : "transparent",
+                color: snapEnabled && gridSize === g ? UI.accentText : UI.textFaint,
+                border: `1px solid ${UI.borderSub}`,
               }}
-            >
-              {g}mm
-            </button>
+            >{g}mm</button>
           ))}
         </div>
       </div>
 
-      <div className="flex flex-1 min-h-0">
-        {/* Tool rail */}
+      <div className="flex flex-1 min-h-0 relative">
+        {/* Tool rail â€" floating */}
         <div
-          className="w-14 flex flex-col items-center gap-1 py-3 px-2 border-r shrink-0"
-          style={{ borderColor: "#2c2f33", background: "#1c1e21" }}
+          className="absolute left-3 top-4 z-20 flex flex-col items-center gap-1 py-3 px-2 rounded-xl shrink-0"
+          style={{
+            background: UI.bgPanel,
+            border: `1px solid ${UI.border}`,
+            boxShadow: "0 8px 32px 0 rgba(0,0,0,0.6), 0 0 0 1px rgba(201,168,76,0.12)",
+          }}
         >
           {TOOLS.map((t) => {
             const Icon = t.icon;
@@ -467,8 +457,8 @@ export default function PCBCardEditor() {
                 }}
                 className="w-9 h-9 flex items-center justify-center rounded-md transition"
                 style={{
-                  background: active ? "#d79a52" : "transparent",
-                  color: active ? "#14201a" : "#a8abae",
+                  background: active ? UI.accent : "transparent",
+                  color: active ? UI.accentText : UI.textMuted,
                 }}
               >
                 <Icon size={16} strokeWidth={2} />
@@ -491,10 +481,10 @@ export default function PCBCardEditor() {
                 <button
                   key={l}
                   onClick={() => setActiveLayer(l)}
-                  className="w-9 h-6 flex items-center justify-center rounded font-mono text-[9px] tracking-wide transition"
+                  className="w-9 h-6 flex items-center justify-center rounded font-mono text-[13px] tracking-wide transition"
                   style={{
-                    background: activeLayer === l ? "#d79a52" : "#2c2f33",
-                    color: activeLayer === l ? "#14201a" : "#6b6e71",
+                    background: activeLayer === l ? UI.accent : UI.bgChipOn,
+                    color: activeLayer === l ? UI.accentText : UI.textFaint,
                   }}
                 >
                   {l === "top" ? "TOP" : "BOT"}
@@ -502,12 +492,13 @@ export default function PCBCardEditor() {
               ))}
             </div>
           )}
+
         </div>
 
         {/* Canvas */}
         <div
           className="flex-1 flex flex-col items-center justify-center overflow-hidden relative"
-          style={{ background: "#18191b", cursor: panDrag ? "grabbing" : undefined }}
+          style={{ background: UI.bgCanvas, cursor: panDrag ? "grabbing" : undefined }}
           onWheel={handleWheel}
           onContextMenu={(e) => e.preventDefault()}
           onPointerDown={startPan}
@@ -515,22 +506,8 @@ export default function PCBCardEditor() {
           onPointerUp={endPan}
           onPointerLeave={endPan}
         >
-          {drawingPoints.length > 0 && (
-            <div
-              className="absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-2 px-3 py-1.5 rounded font-mono text-[11px] z-10"
-              style={{ background: "#1c1e21", border: "1px solid #34373b", color: "#a8abae" }}
-            >
-              {tool === "trace" ? "Drawing trace" : "Drawing cutout"} · {drawingPoints.length} pt(s)
-              <button onClick={finishDrawing} className="p-1 rounded" style={{ color: "#9ba3a8" }}>
-                <Check size={13} />
-              </button>
-              <button onClick={cancelDrawing} className="p-1 rounded" style={{ color: "#e8543f" }}>
-                <XIcon size={13} />
-              </button>
-            </div>
-          )}
 
-          {/* ── FRONT (top) ── */}
+          {/* â"€â"€ FRONT (top) â"€â"€ */}
           <div style={{ transform: `translate(${pan.x}px, ${pan.y}px)` }}>
             <svg
               ref={svgRef}
@@ -538,6 +515,7 @@ export default function PCBCardEditor() {
               width={viewW * MM_TO_PX * zoom}
               height={frontViewH * MM_TO_PX * zoom}
               onClick={handleCanvasClick}
+              onContextMenu={(e) => { e.preventDefault(); if (drawingPoints.length) finishDrawing(); else setTool("select"); }}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
               style={{ cursor: panDrag ? "grabbing" : tool === "select" ? "default" : "crosshair", display: "block" }}
@@ -548,7 +526,7 @@ export default function PCBCardEditor() {
                   <stop offset="100%" stopColor="#3a3d40" stopOpacity="0.5" />
                 </linearGradient>
                 <pattern id="dotGrid" x={dotOffsetX} y={dotOffsetY} width={gridSize} height={gridSize} patternUnits="userSpaceOnUse">
-                  <circle cx={0} cy={0} r={0.24} fill={boardColor.dot} />
+                  <circle cx={0} cy={0} r={0.27} fill={boardColor.dot} fillOpacity={1} />
                 </pattern>
                 <clipPath id="boardClip">
                   <rect x={0} y={0} width={board.width} height={board.height} rx={board.corner} ry={board.corner} />
@@ -558,11 +536,11 @@ export default function PCBCardEditor() {
                 {/* board substrate */}
                 {layerVis.outline && (
                   <rect x={0} y={0} width={board.width} height={board.height} rx={board.corner} ry={board.corner}
-                    fill={boardColor.fill} stroke="url(#copperEdge)" strokeWidth={0.4} />
+                    fill={boardColor.fill} {...boardBorder} />
                 )}
                 {/* dot grid clipped to board shape */}
-                <rect x={0} y={0} width={board.width} height={board.height} rx={board.corner} ry={board.corner}
-                  fill="url(#dotGrid)" clipPath="url(#boardClip)" />
+                {showDots && <rect x={2} y={2} width={board.width - 4} height={board.height - 4}
+                  fill="url(#dotGrid)" clipPath="url(#boardClip)" />}
 
                 {/* top copper */}
                 {layerVis.topCopper &&
@@ -582,11 +560,19 @@ export default function PCBCardEditor() {
                 {elements.filter((e) => e.type === "hole" || e.type === "cutout").map((e) => renderElement(e, "board"))}
 
                 {/* in-progress drawing */}
-                {drawingPoints.length > 0 && (
+                {drawingPoints.length > 0 && drawingLayerRef.current === "top" && (
                   <>
-                    <path d={cuPath(drawingPoints, false)} fill="none" stroke="#e3a869"
+                    <path d={cuPath(drawingPoints, false)} fill="none" stroke={boardColor.copper}
                       strokeWidth={tool === "trace" ? 0.3 : 0.15}
                       strokeDasharray={tool === "cutout" ? "0.6 0.4" : undefined} />
+                    {cursorPt && (
+                      <line
+                        x1={drawingPoints[drawingPoints.length-1].x} y1={drawingPoints[drawingPoints.length-1].y}
+                        x2={cursorPt.x} y2={cursorPt.y}
+                        stroke={boardColor.copper} strokeWidth={tool === "trace" ? 0.3 : 0.15}
+                        strokeDasharray="0.6 0.4" strokeOpacity={0.6}
+                      />
+                    )}
                     {drawingPoints.map((p, i) => (
                       <circle key={i} cx={p.x} cy={p.y} r={0.4} fill="#9ba3a8" />
                     ))}
@@ -596,7 +582,7 @@ export default function PCBCardEditor() {
             </svg>
           </div>
 
-          {/* ── BACK (bottom) — mirrored horizontally ── */}
+          {/* â"€â"€ BACK (bottom) â€" mirrored horizontally â"€â"€ */}
           <div style={{ transform: `translate(${pan.x}px, ${pan.y}px)` }}>
             <svg
               ref={svgBackRef}
@@ -604,11 +590,18 @@ export default function PCBCardEditor() {
               width={viewW * MM_TO_PX * zoom}
               height={backViewH * MM_TO_PX * zoom}
               style={{ display: "block", cursor: tool === "select" ? "default" : "crosshair" }}
+              onContextMenu={(e) => { e.preventDefault(); if (drawingPoints.length) finishDrawing(); else setTool("select"); }}
               onClick={(e) => {
                 if (dragging) return;
                 const raw = clientToMMBack(e.clientX, e.clientY);
+                if (raw.x < 0 || raw.x > board.width || raw.y < 0 || raw.y > board.height) return;
                 const pt = clampToBoard(snapPt(raw));
-                if (tool === "pad-tht") {
+                if (tool === "trace" || tool === "cutout") {
+                  if (drawingPoints.length === 0) drawingLayerRef.current = "bottom";
+                  const { pt: snapped, padId } = snapToPad(pt, "bottom");
+                  setDrawingPoints((prev) => [...prev, snapped]);
+                  setDrawingConnections((prev) => padId ? [...prev, { pointIndex: drawingPoints.length, padId }] : prev);
+                } else if (tool === "pad-tht") {
                   addElement({ type: "pad", kind: "tht", layer: "both", x: pt.x, y: pt.y, size: 1.6, drill: 0.8 });
                 } else if (tool === "pad-smd") {
                   addElement({ type: "pad", kind: "smd", layer: "bottom", x: pt.x, y: pt.y, shape: "rect", w: 1.6, h: 1.2 });
@@ -621,15 +614,32 @@ export default function PCBCardEditor() {
                 }
               }}
               onPointerMove={(e) => {
-                if (!dragging) return;
                 const pt = clientToMMBack(e.clientX, e.clientY);
+                if (drawingPoints.length > 0 && drawingLayerRef.current === "bottom") setCursorPt(snapPt(pt));
+                if (!dragging || !dragging.back) return;
                 const dx = snapDelta(pt.x - dragging.start.x);
                 const dy = snapDelta(pt.y - dragging.start.y);
                 const orig = dragging.orig;
                 if (orig.type === "trace" || orig.type === "cutout") {
                   updateElement(dragging.id, { points: orig.points.map((p: {x:number,y:number}) => ({ x: p.x + dx, y: p.y + dy })) });
                 } else {
-                  updateElement(dragging.id, { x: snap(orig.x + dx, dotOffsetX), y: snap(orig.y + dy, dotOffsetY) });
+                  const { x: newX, y: newY } = clampToBoard({ x: snap(orig.x + dx, dotOffsetX), y: snap(orig.y + dy, dotOffsetY) });
+                  const ATTACH_EPS = 0.5;
+                  setElements((prev) => {
+                    const pad = prev.find((el) => el.id === dragging.id);
+                    const padX = pad ? pad.x : orig.x;
+                    const padY = pad ? pad.y : orig.y;
+                    return prev.map((el) => {
+                      if (el.id === dragging.id) return { ...el, x: newX, y: newY };
+                      if (el.type !== "trace") return el;
+                      const newPoints = el.points.map((p: any) => {
+                        const dx2 = p.x - padX;
+                        const dy2 = p.y - padY;
+                        return Math.sqrt(dx2*dx2 + dy2*dy2) < ATTACH_EPS ? { x: newX, y: newY } : p;
+                      });
+                      return { ...el, points: newPoints };
+                    });
+                  });
                 }
               }}
               onPointerUp={onPointerUp}
@@ -640,52 +650,146 @@ export default function PCBCardEditor() {
                   <stop offset="100%" stopColor="#3a3d40" stopOpacity="0.5" />
                 </linearGradient>
                 <pattern id="dotGridBack" x={dotOffsetX} y={dotOffsetY} width={gridSize} height={gridSize} patternUnits="userSpaceOnUse">
-                  <circle cx={0} cy={0} r={0.24} fill={boardColor.dot} />
+                  <circle cx={0} cy={0} r={0.27} fill={boardColor.dot} fillOpacity={1} />
                 </pattern>
                 <clipPath id="boardClipBack">
                   <rect x={0} y={0} width={board.width} height={board.height} rx={board.corner} ry={board.corner} />
                 </clipPath>
               </defs>
-              {/* mirror horizontally around card center so back is physically correct */}
-              <g transform={`translate(${marginMM}, ${gapMM}) scale(-1,1) translate(${-board.width}, 0)`}>
+              {/* no mirror — board, text, traces, in-progress */}
+              <g transform={`translate(${marginMM}, ${gapMM})`}>
                 {/* board substrate */}
                 {layerVis.outline && (
                   <rect x={0} y={0} width={board.width} height={board.height} rx={board.corner} ry={board.corner}
-                    fill={boardColor.fill} stroke="url(#copperEdgeBack)" strokeWidth={0.4} />
+                    fill={boardColor.fill} {...boardBorder} />
                 )}
-                {/* dot grid clipped to board shape */}
-                <rect x={0} y={0} width={board.width} height={board.height} rx={board.corner} ry={board.corner}
-                  fill="url(#dotGridBack)" clipPath="url(#boardClipBack)" />
+                {/* dot grid */}
+                {showDots && <rect x={2} y={2} width={board.width - 4} height={board.height - 4}
+                  fill="url(#dotGridBack)" clipPath="url(#boardClipBack)" />}
 
-                {/* bottom copper */}
+                {/* bottom copper traces (no mirror) */}
                 {layerVis.bottomCopper &&
                   elements
                     .filter((e) => e.layer === "bottom" || e.layer === "both")
-                    .filter((e) => e.type === "trace" || e.type === "pad")
-                    .map((e) => renderElement(e, "copper"))}
+                    .filter((e) => e.type === "trace")
+                    .map((e) => renderElement(e, "copper", true))}
 
                 {/* bottom silk */}
                 {layerVis.bottomSilk &&
                   elements
                     .filter((e) => e.layer === "bottom")
                     .filter((e) => e.type === "text" || e.type === "image")
-                    .map((e) => renderElement(e, "silk"))}
+                    .map((e) => renderElement(e, "silk", true))}
 
-                {/* holes + cutouts */}
-                {elements.filter((e) => e.type === "hole" || e.type === "cutout").map((e) => renderElement(e, "board"))}
+                {/* cutouts */}
+                {elements.filter((e) => e.type === "cutout").map((e) => renderElement(e, "board", true))}
+
+                {/* in-progress drawing on back canvas */}
+                {drawingPoints.length > 0 && drawingLayerRef.current === "bottom" && (
+                  <>
+                    <path d={cuPath(drawingPoints, false)} fill="none" stroke={boardColor.copper}
+                      strokeWidth={tool === "trace" ? 0.3 : 0.15}
+                      strokeDasharray={tool === "cutout" ? "0.6 0.4" : undefined} />
+                    {cursorPt && (
+                      <line
+                        x1={drawingPoints[drawingPoints.length-1].x} y1={drawingPoints[drawingPoints.length-1].y}
+                        x2={cursorPt.x} y2={cursorPt.y}
+                        stroke={boardColor.copper} strokeWidth={tool === "trace" ? 0.3 : 0.15}
+                        strokeDasharray="0.6 0.4" strokeOpacity={0.6}
+                      />
+                    )}
+                    {drawingPoints.map((p, i) => (
+                      <circle key={i} cx={p.x} cy={p.y} r={0.4} fill="#9ba3a8" />
+                    ))}
+                  </>
+                )}
+              </g>
+
+              {/* mirrored — THT pads and holes only */}
+              <g transform={`translate(${marginMM}, ${gapMM}) scale(-1,1) translate(${-board.width}, 0)`}>
+                {layerVis.bottomCopper &&
+                  elements
+                    .filter((e) => e.layer === "both")
+                    .filter((e) => e.type === "pad" && e.kind === "tht")
+                    .map((e) => renderElement(e, "copper", true))}
+                {elements.filter((e) => e.type === "hole").map((e) => renderElement(e, "board", true))}
               </g>
             </svg>
           </div>
         </div>
 
-        {/* Properties panel */}
+        {/* Zoom control - bottom center floating */}
         <div
-          className="w-64 border-l flex flex-col"
-          style={{ borderColor: "#2c2f33", background: "#1c1e21" }}
+          className="absolute bottom-4 right-3 z-20 flex items-center gap-1 px-3 py-1.5 rounded-xl font-mono text-[13px]"
+          style={{
+            background: UI.bgPanel,
+            border: `1px solid ${UI.border}`,
+            boxShadow: "0 8px 32px 0 rgba(0,0,0,0.6)",
+            color: UI.textMuted,
+          }}
+        >
+          <button onClick={() => setZoom((z) => Math.max(0.5, +(z - 0.25).toFixed(2)))} className="w-6 h-6 flex items-center justify-center rounded hover:opacity-70 transition">−</button>
+          <span className="w-12 text-center cursor-pointer" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }} title="Reset zoom">{Math.round(zoom * 100)}%</span>
+          <button onClick={() => setZoom((z) => Math.min(3, +(z + 0.25).toFixed(2)))} className="w-6 h-6 flex items-center justify-center rounded hover:opacity-70 transition">+</button>
+        </div>
+
+        {/* Layers panel - floating bottom-left, foldable */}
+        <div
+          className="absolute left-3 bottom-4 z-20 flex flex-col rounded-xl overflow-hidden"
+          style={{
+            background: UI.bgPanel,
+            border: `1px solid ${UI.border}`,
+            boxShadow: "0 8px 32px 0 rgba(0,0,0,0.6)",
+            width: layersOpen ? "140px" : "56px",
+            transition: "width 0.2s ease",
+          }}
+        >
+          <div className="flex flex-col gap-0.5 p-2">
+            {LAYERS.map((l) => {
+              const on = layerVis[l.key];
+              return (
+                <button
+                  key={l.key}
+                  onClick={() => setLayerVis((v) => ({ ...v, [l.key]: !v[l.key] }))}
+                  className="flex items-center justify-center gap-2 px-2 py-1.5 rounded-lg transition"
+                  style={{
+                    background: on ? "rgba(255,255,255,0.05)" : "transparent",
+                    border: `1px solid ${on ? l.swatch + "60" : "transparent"}`,
+                  }}
+                >
+                  <span
+                    className="w-2.5 h-2.5 rounded-sm shrink-0"
+                    style={{ background: on ? l.swatch : UI.borderSub, boxShadow: on ? `0 0 4px ${l.swatch}` : "none" }}
+                  />
+                  {layersOpen && (
+                    <span className="font-mono text-[12px] tracking-wide whitespace-nowrap overflow-hidden" style={{ color: on ? UI.textPrimary : UI.textFaint }}>
+                      {l.label}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+            <button
+              onClick={() => setLayersOpen((o) => !o)}
+              className="flex items-center justify-center mt-1 py-1 rounded-lg transition"
+              style={{ color: UI.textFaint, fontSize: 10, border: `1px solid ${UI.borderSub}` }}
+            >{layersOpen ? "◂ hide" : "▸"}</button>
+          </div>
+        </div>
+
+        {/* Properties panel - floating */}
+        <div
+          className="absolute right-3 top-4 z-20 w-64 flex flex-col rounded-xl overflow-hidden"
+          style={{
+            background: UI.bgPanel,
+            border: `1px solid ${UI.border}`,
+            boxShadow: "0 8px 32px 0 rgba(0,0,0,0.6), 0 0 0 1px rgba(201,168,76,0.12)",
+            maxHeight: "calc(100% - 2rem)",
+          }}
         >
           <div
-            className="px-3 py-2 border-b font-mono text-[10px] tracking-widest"
-            style={{ borderColor: "#2c2f33", color: "#6b6e71" }}
+            className="px-3 py-2 border-b font-mono text-[14px] tracking-widest"
+            style={{ borderColor: UI.border, color: UI.textFaint }}
           >
             {selected ? selected.type.toUpperCase() + " — SPEC" : "BOARD — SPEC"}
           </div>
@@ -711,8 +815,8 @@ export default function PCBCardEditor() {
             {selected && (
               <button
                 onClick={deleteSelected}
-                className="mt-2 flex items-center justify-center gap-1.5 py-1.5 rounded font-mono text-[11px]"
-                style={{ background: "rgba(232,84,63,0.12)", color: "#e8543f", border: "1px solid #4a2a25" }}
+                className="mt-2 flex items-center justify-center gap-1.5 py-1.5 rounded font-mono text-[15px]"
+                style={{ background: UI.dangerBg, color: UI.danger, border: `1px solid ${UI.dangerBorder}` }}
               >
                 <Trash2 size={13} /> DELETE ELEMENT
               </button>
@@ -725,14 +829,23 @@ export default function PCBCardEditor() {
 
   // ---- element renderer (closure over state) ----
 
-  function renderElement(el, pass) {
+  function renderElement(el, pass, isBack = false) {
     const isSelected = el.id === selectedId;
     const strokeSel = isSelected ? { stroke: "#9ba3a8", strokeWidth: 0.15, strokeDasharray: "0.4 0.3" } : {};
-    const onRMB = (e) => deleteElement(e, el.id);
+    const onRMB = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (tool !== "select") {
+        if (drawingPoints.length) finishDrawing();
+        else setTool("select");
+        return;
+      }
+      deleteElement(e, el.id);
+    };
 
     if (el.type === "trace") {
       return (
-        <g key={el.id} onPointerDown={(e) => startDrag(e, el)} onContextMenu={onRMB} style={{ cursor: "move" }}>
+        <g key={el.id} onPointerDown={(e) => startDrag(e, el, isBack)} onClick={(e) => { if (tool === "select") e.stopPropagation(); }} onContextMenu={onRMB} style={{ cursor: "move" }}>
           <path
             d={cuPath(el.points, false)}
             fill="none"
@@ -749,9 +862,9 @@ export default function PCBCardEditor() {
       );
     }
     if (el.type === "pad") {
-      const fill = layerColor(el.layer === "both" ? "top" : el.layer, "copper");
+      const fill = "#c8ccd0";
       return (
-        <g key={el.id} onPointerDown={(e) => startDrag(e, el)} onContextMenu={onRMB} style={{ cursor: "move" }}>
+        <g key={el.id} onPointerDown={(e) => startDrag(e, el, isBack)} onClick={(e) => { if (tool === "select") e.stopPropagation(); }} onContextMenu={onRMB} style={{ cursor: "move" }}>
           {el.kind === "tht" ? (
             <>
               <circle cx={el.x} cy={el.y} r={el.size / 2} fill={fill} {...strokeSel} />
@@ -773,7 +886,8 @@ export default function PCBCardEditor() {
           fontSize={el.size}
           fontFamily={font.css}
           fill={layerColor(el.layer, "silk")}
-          onPointerDown={(e) => startDrag(e, el)}
+          onPointerDown={(e) => startDrag(e, el, isBack)}
+          onClick={(e) => { if (tool === "select") e.stopPropagation(); }}
           onContextMenu={onRMB}
           style={{ cursor: "move", ...(isSelected ? { paintOrder: "stroke", stroke: "#9ba3a8", strokeWidth: 0.15 } : {}) }}
         >
@@ -790,7 +904,8 @@ export default function PCBCardEditor() {
           y={el.y}
           width={el.w}
           height={el.h}
-          onPointerDown={(e) => startDrag(e, el)}
+          onPointerDown={(e) => startDrag(e, el, isBack)}
+          onClick={(e) => { if (tool === "select") e.stopPropagation(); }}
           onContextMenu={onRMB}
           style={{ cursor: "move" }}
           opacity={0.92}
@@ -799,8 +914,8 @@ export default function PCBCardEditor() {
     }
     if (el.type === "hole") {
       return (
-        <g key={el.id} onPointerDown={(e) => startDrag(e, el)} onContextMenu={onRMB} style={{ cursor: "move" }}>
-          <circle cx={el.x} cy={el.y} r={el.diameter / 2} fill="#18191b" stroke={el.plated ? "#e3a869" : "#6b6e71"}
+        <g key={el.id} onPointerDown={(e) => startDrag(e, el, isBack)} onClick={(e) => { if (tool === "select") e.stopPropagation(); }} onContextMenu={onRMB} style={{ cursor: "move" }}>
+          <circle cx={el.x} cy={el.y} r={el.diameter / 2} fill="#18191b" stroke={el.plated ? boardColor.copper : "#6b6e71"}
             strokeWidth={0.25} {...strokeSel} />
         </g>
       );
@@ -813,7 +928,8 @@ export default function PCBCardEditor() {
           fill="#18191b"
           stroke={isSelected ? "#9ba3a8" : "#6b6e71"}
           strokeWidth={0.2}
-          onPointerDown={(e) => startDrag(e, el)}
+          onPointerDown={(e) => startDrag(e, el, isBack)}
+          onClick={(e) => { if (tool === "select") e.stopPropagation(); }}
           onContextMenu={onRMB}
           style={{ cursor: "move" }}
         />
@@ -827,7 +943,7 @@ export default function PCBCardEditor() {
 
 function Label({ children }) {
   return (
-    <span className="font-mono text-[10px] tracking-widest block mb-1" style={{ color: "#6b6e71" }}>
+    <span className="font-mono text-[14px] tracking-widest block mb-1" style={{ color: UI.textFaint }}>
       {children}
     </span>
   );
@@ -843,8 +959,8 @@ function NumberField({ label, value, onChange, step = 1, min }) {
         step={step}
         min={min}
         onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
-        className="w-full px-2 py-1.5 rounded font-mono text-[12px] outline-none"
-        style={{ background: "#18191b", border: "1px solid #34373b", color: "#ececeb" }}
+        className="w-full px-2 py-1.5 rounded font-mono text-[14px] outline-none"
+        style={{ background: UI.bgInput, border: `1px solid ${UI.borderSub}`, color: UI.textPrimary }}
       />
     </div>
   );
@@ -857,14 +973,14 @@ function BoardProps({ board, setBoard }) {
       <NumberField label="Height (mm)" value={board.height} onChange={(v) => setBoard((b) => ({ ...b, height: v }))} />
       <NumberField label="Corner radius (mm)" value={board.corner} step={0.5} min={0}
         onChange={(v) => setBoard((b) => ({ ...b, corner: v }))} />
-      <div className="pt-2 mt-1 border-t" style={{ borderColor: "#2c2f33" }}>
+      <div className="pt-2 mt-1 border-t" style={{ borderColor: UI.border }}>
         <Label>Preset</Label>
         <button
           onClick={() => setBoard({ width: 85, height: 54, corner: 3 })}
-          className="w-full px-2 py-1.5 rounded font-mono text-[11px]"
-          style={{ background: "#2c2f33", color: "#e3a869" }}
+          className="w-full px-2 py-1.5 rounded font-mono text-[15px]"
+          style={{ background: UI.bgChipOn, color: UI.accentDark }}
         >
-          Standard 85 × 54mm
+          Standard 85 Ã— 54mm
         </button>
       </div>
     </>
@@ -899,8 +1015,8 @@ function TextProps({ el, onChange }) {
         <input
           value={el.content}
           onChange={(e) => onChange({ content: e.target.value })}
-          className="w-full px-2 py-1.5 rounded text-[12px] outline-none"
-          style={{ background: "#18191b", border: "1px solid #34373b", color: "#ececeb" }}
+          className="w-full px-2 py-1.5 rounded text-[14px] outline-none"
+          style={{ background: UI.bgInput, border: `1px solid ${UI.borderSub}`, color: UI.textPrimary }}
         />
       </div>
       <div>
@@ -910,12 +1026,12 @@ function TextProps({ el, onChange }) {
             <button
               key={f.key}
               onClick={() => onChange({ font: f.key })}
-              className="px-2 py-1.5 rounded text-[11px]"
+              className="px-2 py-1.5 rounded text-[15px]"
               style={{
                 fontFamily: f.css,
-                background: el.font === f.key ? "#d79a52" : "#18191b",
-                color: el.font === f.key ? "#14201a" : "#a8abae",
-                border: "1px solid #34373b",
+                background: el.font === f.key ? UI.accent : UI.bgInput,
+                color: el.font === f.key ? UI.accentText : UI.textMuted,
+                border: `1px solid ${UI.borderSub}`,
               }}
             >
               {f.label}
@@ -940,11 +1056,11 @@ function HoleProps({ el, onChange }) {
             <button
               key={String(v)}
               onClick={() => onChange({ plated: v })}
-              className="px-2 py-1.5 rounded font-mono text-[11px]"
+              className="px-2 py-1.5 rounded font-mono text-[15px]"
               style={{
-                background: el.plated === v ? "#d79a52" : "#18191b",
-                color: el.plated === v ? "#14201a" : "#a8abae",
-                border: "1px solid #34373b",
+                background: el.plated === v ? UI.accent : UI.bgInput,
+                color: el.plated === v ? UI.accentText : UI.textMuted,
+                border: `1px solid ${UI.borderSub}`,
               }}
             >
               {v ? "Yes" : "No"}
