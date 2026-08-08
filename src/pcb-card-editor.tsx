@@ -18,8 +18,8 @@ import {
 const MM_TO_PX = 3.7795; // 96 DPI: 1mm = 96/25.4 px
 const LAYERS = [
   { key: "topSilk", label: "Top Silk", swatch: "#f0f0e8" },
-  { key: "topCopper", label: "Top Cu", swatch: "#c8922a" },
-  { key: "bottomCopper", label: "Bot Cu", swatch: "#a87820" },
+  { key: "topCopper", label: "Top Cupper", swatch: "#c8922a" },
+  { key: "bottomCopper", label: "Bot Cupper", swatch: "#a87820" },
   { key: "bottomSilk", label: "Bot Silk", swatch: "#d8d8d0" },
   { key: "outline", label: "Outline", swatch: "#8a9298" },
 ];
@@ -62,15 +62,16 @@ export default function PCBCardEditor() {
   });
   const [selectedId, setSelectedId] = useState(null);
   const [drawingPoints, setDrawingPoints] = useState([]);
-  const [cursorPt, setCursorPt] = useState<{x:number,y:number}|null>(null);
+  const [cursorPt, setCursorPt] = useState<{ x: number, y: number } | null>(null);
   const drawingLayerRef = useRef("top");
-  const [drawingConnections, setDrawingConnections] = useState<{pointIndex:number,padId:string}[]>([]);
+  const [drawingConnections, setDrawingConnections] = useState<{ pointIndex: number, padId: string }[]>([]);
   const [zoom, setZoom] = useState(1.75);
   const [dragging, setDragging] = useState(null); // { id, startMouseMM, startPoints }
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [panDrag, setPanDrag] = useState(null); // { startX, startY, origX, origY }
   const [gridSize, setGridSize] = useState(2.54);
   const [snapEnabled, setSnapEnabled] = useState(true);
+  const [orthoMode, setOrthoMode] = useState(false);
   const [showDots, setShowDots] = useState(true);
   const [boardColorKey, setBoardColorKey] = useState("green");
   const boardColor = BOARD_COLORS.find((c) => c.key === boardColorKey)!;
@@ -127,6 +128,14 @@ export default function PCBCardEditor() {
   const snap = (v, offset: number) => snapEnabled ? Math.round((v - offset) / gridSize) * gridSize + offset : v;
   const snapPt = (p) => ({ x: snap(p.x, dotOffsetX), y: snap(p.y, dotOffsetY) });
   const snapDelta = (d) => (snapEnabled ? Math.round(d / gridSize) * gridSize : d);
+  const snapOrtho = (pt: { x: number, y: number }, from: { x: number, y: number }) => {
+    const dx = pt.x - from.x;
+    const dy = pt.y - from.y;
+    const angle = Math.atan2(dy, dx);
+    const snap45 = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4);
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    return { x: from.x + dist * Math.cos(snap45), y: from.y + dist * Math.sin(snap45) };
+  };
 
   // ---- element creation ----
 
@@ -182,7 +191,9 @@ export default function PCBCardEditor() {
     if (tool === "trace" || tool === "cutout") {
       const layer = drawingPoints.length === 0 ? (drawingLayerRef.current = "top", "top") : drawingLayerRef.current;
       const { pt: snapped, padId } = snapToPad(pt, layer);
-      setDrawingPoints((prev) => [...prev, snapped]);
+      const ortho = orthoMode && drawingPoints.length > 0 ? snapOrtho(snapped, drawingPoints[drawingPoints.length - 1]) : snapped;
+      const finalPt = clampToBoard(ortho);
+      setDrawingPoints((prev) => [...prev, finalPt]);
       if (padId) setDrawingConnections((prev) => [...prev, { pointIndex: drawingPoints.length, padId }]);
       return;
     }
@@ -251,7 +262,10 @@ export default function PCBCardEditor() {
 
   const onPointerMove = (e) => {
     const pt = clientToMM(e.clientX, e.clientY);
-    if (drawingPoints.length > 0 && drawingLayerRef.current === "top") setCursorPt(snapPt(pt));
+    if (drawingPoints.length > 0 && drawingLayerRef.current === "top") {
+      const snapped = snapPt(pt);
+      setCursorPt(orthoMode && drawingPoints.length > 0 ? snapOrtho(snapped, drawingPoints[drawingPoints.length - 1]) : snapped);
+    }
     if (!dragging || dragging.back) return;
     const dx = snapDelta(pt.x - dragging.start.x);
     const dy = snapDelta(pt.y - dragging.start.y);
@@ -273,7 +287,7 @@ export default function PCBCardEditor() {
           const newPoints = el.points.map((p: any) => {
             const dx2 = p.x - padX;
             const dy2 = p.y - padY;
-            return Math.sqrt(dx2*dx2 + dy2*dy2) < ATTACH_EPS ? { x: newX, y: newY } : p;
+            return Math.sqrt(dx2 * dx2 + dy2 * dy2) < ATTACH_EPS ? { x: newX, y: newY } : p;
           });
           return { ...el, points: newPoints };
         });
@@ -414,6 +428,15 @@ export default function PCBCardEditor() {
               border: `1px solid ${UI.borderSub}`,
             }}
           >{snapEnabled ? "SNAP ON" : "SNAP OFF"}</button>
+          <button
+            onClick={() => setOrthoMode((s) => !s)}
+            className="px-2 py-1 rounded"
+            style={{
+              background: orthoMode ? UI.bgChipOn : "transparent",
+              color: orthoMode ? UI.accent : UI.textFaint,
+              border: `1px solid ${UI.borderSub}`,
+            }}
+          >{orthoMode ? "ORTHO ON" : "ORTHO OFF"}</button>
           {[2.54, 1.27].map((g) => (
             <button
               key={g}
@@ -567,7 +590,7 @@ export default function PCBCardEditor() {
                       strokeDasharray={tool === "cutout" ? "0.6 0.4" : undefined} />
                     {cursorPt && (
                       <line
-                        x1={drawingPoints[drawingPoints.length-1].x} y1={drawingPoints[drawingPoints.length-1].y}
+                        x1={drawingPoints[drawingPoints.length - 1].x} y1={drawingPoints[drawingPoints.length - 1].y}
                         x2={cursorPt.x} y2={cursorPt.y}
                         stroke={boardColor.copper} strokeWidth={tool === "trace" ? 0.3 : 0.15}
                         strokeDasharray="0.6 0.4" strokeOpacity={0.6}
@@ -599,7 +622,9 @@ export default function PCBCardEditor() {
                 if (tool === "trace" || tool === "cutout") {
                   if (drawingPoints.length === 0) drawingLayerRef.current = "bottom";
                   const { pt: snapped, padId } = snapToPad(pt, "bottom");
-                  setDrawingPoints((prev) => [...prev, snapped]);
+                  const ortho = orthoMode && drawingPoints.length > 0 ? snapOrtho(snapped, drawingPoints[drawingPoints.length - 1]) : snapped;
+                  const finalPt = clampToBoard(ortho);
+                  setDrawingPoints((prev) => [...prev, finalPt]);
                   setDrawingConnections((prev) => padId ? [...prev, { pointIndex: drawingPoints.length, padId }] : prev);
                 } else if (tool === "pad-tht") {
                   addElement({ type: "pad", kind: "tht", layer: "both", x: pt.x, y: pt.y, size: 1.6, drill: 0.8 });
@@ -615,13 +640,16 @@ export default function PCBCardEditor() {
               }}
               onPointerMove={(e) => {
                 const pt = clientToMMBack(e.clientX, e.clientY);
-                if (drawingPoints.length > 0 && drawingLayerRef.current === "bottom") setCursorPt(snapPt(pt));
+                if (drawingPoints.length > 0 && drawingLayerRef.current === "bottom") {
+                  const snapped = snapPt(pt);
+                  setCursorPt(orthoMode && drawingPoints.length > 0 ? snapOrtho(snapped, drawingPoints[drawingPoints.length - 1]) : snapped);
+                }
                 if (!dragging || !dragging.back) return;
                 const dx = snapDelta(pt.x - dragging.start.x);
                 const dy = snapDelta(pt.y - dragging.start.y);
                 const orig = dragging.orig;
                 if (orig.type === "trace" || orig.type === "cutout") {
-                  updateElement(dragging.id, { points: orig.points.map((p: {x:number,y:number}) => ({ x: p.x + dx, y: p.y + dy })) });
+                  updateElement(dragging.id, { points: orig.points.map((p: { x: number, y: number }) => ({ x: p.x + dx, y: p.y + dy })) });
                 } else {
                   const { x: newX, y: newY } = clampToBoard({ x: snap(orig.x + dx, dotOffsetX), y: snap(orig.y + dy, dotOffsetY) });
                   const ATTACH_EPS = 0.5;
@@ -635,7 +663,7 @@ export default function PCBCardEditor() {
                       const newPoints = el.points.map((p: any) => {
                         const dx2 = p.x - padX;
                         const dy2 = p.y - padY;
-                        return Math.sqrt(dx2*dx2 + dy2*dy2) < ATTACH_EPS ? { x: newX, y: newY } : p;
+                        return Math.sqrt(dx2 * dx2 + dy2 * dy2) < ATTACH_EPS ? { x: newX, y: newY } : p;
                       });
                       return { ...el, points: newPoints };
                     });
@@ -692,7 +720,7 @@ export default function PCBCardEditor() {
                       strokeDasharray={tool === "cutout" ? "0.6 0.4" : undefined} />
                     {cursorPt && (
                       <line
-                        x1={drawingPoints[drawingPoints.length-1].x} y1={drawingPoints[drawingPoints.length-1].y}
+                        x1={drawingPoints[drawingPoints.length - 1].x} y1={drawingPoints[drawingPoints.length - 1].y}
                         x2={cursorPt.x} y2={cursorPt.y}
                         stroke={boardColor.copper} strokeWidth={tool === "trace" ? 0.3 : 0.15}
                         strokeDasharray="0.6 0.4" strokeOpacity={0.6}
@@ -744,6 +772,12 @@ export default function PCBCardEditor() {
             transition: "width 0.2s ease",
           }}
         >
+           <button
+              onClick={() => setLayersOpen((o) => !o)}
+              className="flex items-center justify-center mt-1 py-1 rounded-lg transition"
+              style={{ color: UI.textFaint, fontSize: 16, border: `1px solid ${UI.borderSub}` }}
+            >{layersOpen ? "◂ hide" : "▸"}</button>
+            
           <div className="flex flex-col gap-0.5 p-2">
             {LAYERS.map((l) => {
               const on = layerVis[l.key];
@@ -769,11 +803,7 @@ export default function PCBCardEditor() {
                 </button>
               );
             })}
-            <button
-              onClick={() => setLayersOpen((o) => !o)}
-              className="flex items-center justify-center mt-1 py-1 rounded-lg transition"
-              style={{ color: UI.textFaint, fontSize: 10, border: `1px solid ${UI.borderSub}` }}
-            >{layersOpen ? "◂ hide" : "▸"}</button>
+           
           </div>
         </div>
 
