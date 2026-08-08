@@ -485,17 +485,18 @@ export default function PCBCardEditor() {
         style={{ borderColor: UI.border, background: UI.bgApp }}
       >
         <div className="flex items-center gap-2">
-          <span className="font-mono text-[12px] tracking-widest" style={{ color: UI.textFaint }}>PCB</span>
+          <span className="font-mono text-[12px] tracking-widest" style={{ color: UI.textFaint }}>PCB Color</span>
           {BOARD_COLORS.map((c) => (
             <button
               key={c.key}
               title={c.label}
-              onClick={() => setBoardColorKey(c.key)}
-              className="w-5 h-5 rounded-sm border transition"
+              onClick={(e) => { setBoardColorKey(c.key); (e.currentTarget as HTMLButtonElement).blur() }}
+              className="w-7 h-5 rounded-sm border focus:outline-none"
               style={{
                 background: c.fill,
-                borderColor: boardColorKey === c.key ? UI.accent : UI.borderSub,
-                boxShadow: boardColorKey === c.key ? `0 0 0 1px ${UI.accent}` : "none",
+                borderColor: c.fill,
+                outline: boardColorKey === c.key ? `2px solid ${UI.textMuted}` : "none",
+                outlineOffset: "2px",
               }}
             />
           ))}
@@ -889,12 +890,12 @@ export default function PCBCardEditor() {
             transition: "width 0.2s ease",
           }}
         >
-           <button
-              onClick={() => setLayersOpen((o) => !o)}
-              className="flex items-center justify-center mt-1 py-1 rounded-lg transition"
-              style={{ color: UI.textFaint, fontSize: 16, border: `1px solid ${UI.borderSub}` }}
-            >{layersOpen ? "◂ hide" : "▸"}</button>
-            
+          <button
+            onClick={() => setLayersOpen((o) => !o)}
+            className="flex items-center justify-center mt-1 py-1 rounded-lg transition"
+            style={{ color: UI.textFaint, fontSize: 16, border: `1px solid ${UI.borderSub}` }}
+          >{layersOpen ? "◂ hide" : "▸"}</button>
+
           <div className="flex flex-col gap-0.5 p-2">
             {LAYERS.map((l) => {
               const on = layerVis[l.key];
@@ -910,7 +911,7 @@ export default function PCBCardEditor() {
                 >
                   <span
                     className="w-2.5 h-2.5 rounded-sm shrink-0"
-                    style={{ background: on ? l.swatch : UI.borderSub, boxShadow: on ? `0 0 4px ${l.swatch}` : "none" }}
+                    style={{ background: on ? l.swatch : UI.borderSub }}
                   />
                   {layersOpen && (
                     <span className="font-mono text-[12px] tracking-wide whitespace-nowrap overflow-hidden" style={{ color: on ? UI.textPrimary : UI.textFaint }}>
@@ -920,7 +921,7 @@ export default function PCBCardEditor() {
                 </button>
               );
             })}
-           
+
           </div>
         </div>
 

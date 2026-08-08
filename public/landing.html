@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PCB Card Maker — Business Cards for Engineers</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #1e1e1e;
+      --bg-panel:    #2a2a2a;
+      --bg-card:     #252525;
+      --border:      #3a3a3a;
+      --text:        #ede9e4;
+      --text-muted:  #b0a89e;
+      --text-faint:  #706860;
+      --accent:      #e8623a;
+      --accent-dark: #c44828;
+      --mono:        ui-monospace, Consolas, 'Courier New', monospace;
+      --sans:        system-ui, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font: 17px/160% var(--sans);
+      background: var(--bg);
+      color: var(--text-muted);
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 40px;
+      height: 56px;
+      background: rgba(30, 30, 30, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-logo {
+      font-family: var(--mono);
+      font-size: 14px;
+      color: var(--text);
+      letter-spacing: 0.08em;
+      text-decoration: none;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .nav-logo .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); display: inline-block; }
+    .nav-cta {
+      background: var(--accent);
+      color: #fff;
+      font-family: var(--mono);
+      font-size: 13px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      text-decoration: none;
+      padding: 8px 18px;
+      border-radius: 4px;
+      transition: background 0.2s;
+    }
+    .nav-cta:hover { background: var(--accent-dark); }
+
+    /* ── HERO ── */
+    .hero {
+      min-height: 100vh;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      text-align: center;
+      padding: 100px 24px 80px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* grid background */
+    .hero::before {
+      content: '';
+      position: absolute; inset: 0;
+      background-image:
+        linear-gradient(rgba(232,98,58,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(232,98,58,0.04) 1px, transparent 1px);
+      background-size: 32px 32px;
+      mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, black 30%, transparent 100%);
+    }
+
+    .hero-label {
+      font-family: var(--mono);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      color: var(--accent);
+      margin-bottom: 24px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .hero-label::before, .hero-label::after {
+      content: ''; flex: 1 1 40px; max-width: 40px; height: 1px; background: var(--accent); opacity: 0.4;
+    }
+
+    h1 {
+      font-family: var(--sans);
+      font-size: clamp(36px, 6vw, 68px);
+      font-weight: 500;
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+      color: var(--text);
+      max-width: 860px;
+      margin-bottom: 24px;
+    }
+    h1 em { font-style: normal; color: var(--accent); }
+
+    .hero-sub {
+      font-size: clamp(15px, 2vw, 18px);
+      color: var(--text-muted);
+      max-width: 520px;
+      line-height: 1.7;
+      margin-bottom: 48px;
+    }
+
+    .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+      font-family: var(--mono);
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      text-decoration: none;
+      padding: 14px 32px;
+      border-radius: 5px;
+      transition: background 0.2s, transform 0.15s;
+      display: inline-block;
+    }
+    .btn-primary:hover { background: var(--accent-dark); transform: translateY(-1px); }
+
+    .btn-ghost {
+      color: var(--text-muted);
+      font-family: var(--mono);
+      font-size: 14px;
+      letter-spacing: 0.05em;
+      text-decoration: none;
+      padding: 14px 28px;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      transition: border-color 0.2s, color 0.2s;
+      display: inline-block;
+    }
+    .btn-ghost:hover { border-color: var(--text-faint); color: var(--text); }
+
+    /* ── PCB CARD SHOWCASE ── */
+    .showcase {
+      padding: 0 24px 100px;
+      display: flex; justify-content: center;
+    }
+
+    .pcb-stack {
+      position: relative;
+      width: 360px;
+      height: 210px;
+    }
+
+    .pcb-card {
+      position: absolute;
+      width: 340px;
+      height: 200px;
+      border-radius: 8px;
+      display: flex; flex-direction: column; justify-content: space-between;
+      padding: 18px 22px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 4px 12px rgba(0,0,0,0.4);
+      font-family: var(--mono);
+    }
+    .pcb-card:nth-child(1) { background: #066434; transform: rotate(-3deg) translateY(6px) translateX(-10px); }
+    .pcb-card:nth-child(2) { background: #073cac; transform: rotate(1.5deg) translateY(2px) translateX(8px); }
+    .pcb-card:nth-child(3) { background: #18191c; transform: rotate(0deg); z-index: 3; }
+
+    .pcb-silk { color: rgba(255,255,255,0.82); }
+    .pcb-name { font-size: 16px; font-weight: 600; letter-spacing: 0.04em; }
+    .pcb-role { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.6; margin-top: 4px; }
+    .pcb-contacts { font-size: 10px; opacity: 0.55; display: flex; flex-direction: column; gap: 2px; }
+    .pcb-traces {
+      position: absolute; inset: 0; border-radius: 8px; overflow: hidden; pointer-events: none;
+    }
+    .pcb-pads {
+      position: absolute; right: 16px; top: 50%; transform: translateY(-50%);
+      display: flex; flex-direction: column; gap: 5px;
+    }
+    .pad {
+      width: 14px; height: 8px; border-radius: 2px;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.18);
+    }
+    .corner-mark {
+      position: absolute; font-size: 8px; opacity: 0.3; font-family: var(--mono);
+    }
+    .corner-mark.tl { top: 8px; left: 10px; }
+    .corner-mark.tr { top: 8px; right: 10px; }
+    .corner-mark.bl { bottom: 8px; left: 10px; }
+    .corner-mark.br { bottom: 8px; right: 10px; }
+
+    /* ── FEATURES ── */
+    section { padding: 80px 24px; max-width: 1100px; margin: 0 auto; }
+
+    .section-label {
+      font-family: var(--mono);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      color: var(--accent);
+      margin-bottom: 16px;
+    }
+
+    h2 {
+      font-size: clamp(26px, 4vw, 40px);
+      font-weight: 500;
+      color: var(--text);
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      margin-bottom: 16px;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 2px;
+      margin-top: 56px;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .feature {
+      background: var(--bg-card);
+      padding: 36px 32px;
+      border: none;
+      transition: background 0.2s;
+    }
+    .feature:hover { background: var(--bg-panel); }
+
+    .feature-icon {
+      width: 40px; height: 40px;
+      border-radius: 8px;
+      background: rgba(232,98,58,0.12);
+      border: 1px solid rgba(232,98,58,0.25);
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 20px;
+    }
+    .feature-icon svg { stroke: var(--accent); fill: none; stroke-width: 1.8; }
+
+    .feature h3 {
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 10px;
+      font-family: var(--sans);
+    }
+    .feature p {
+      font-size: 14px;
+      line-height: 1.65;
+      color: var(--text-muted);
+    }
+
+    /* ── COLORS ── */
+    .colors-section { padding: 80px 24px; background: var(--bg-panel); }
+    .colors-inner { max-width: 1100px; margin: 0 auto; }
+
+    .color-swatches {
+      display: flex; gap: 12px; flex-wrap: wrap; margin-top: 40px;
+    }
+
+    .swatch {
+      display: flex; flex-direction: column; align-items: center; gap: 10px;
+      cursor: pointer;
+    }
+    .swatch-board {
+      width: 72px; height: 44px; border-radius: 6px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+      position: relative; overflow: hidden;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .swatch:hover .swatch-board { transform: translateY(-4px); box-shadow: 0 12px 28px rgba(0,0,0,0.6); }
+
+    /* silkscreen dots pattern */
+    .swatch-board::after {
+      content: ''; position: absolute; inset: 0;
+      background-image: radial-gradient(circle, rgba(255,255,255,0.18) 1px, transparent 1px);
+      background-size: 8px 8px;
+    }
+
+    .swatch-label {
+      font-family: var(--mono);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-faint);
+    }
+
+    /* ── HOW IT WORKS ── */
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 0;
+      margin-top: 56px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .step {
+      padding: 36px 28px;
+      border-right: 1px solid var(--border);
+      background: var(--bg-card);
+    }
+    .step:last-child { border-right: none; }
+
+    .step-num {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      color: var(--accent);
+      text-transform: uppercase;
+      margin-bottom: 16px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .step-num::after {
+      content: ''; flex: 1; height: 1px; background: var(--border); max-width: 32px;
+    }
+
+    .step h3 {
+      font-size: 17px;
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 10px;
+    }
+    .step p {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.65;
+    }
+
+    /* ── CTA BOTTOM ── */
+    .cta-section {
+      padding: 100px 24px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .cta-section::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse 60% 50% at 50% 50%, rgba(232,98,58,0.07) 0%, transparent 70%);
+    }
+    .cta-section h2 { max-width: 600px; margin: 0 auto 16px; }
+    .cta-section p { max-width: 440px; margin: 0 auto 40px; }
+
+    /* ── FOOTER ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 28px 40px;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 16px; flex-wrap: wrap;
+    }
+    footer span {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text-faint);
+    }
+    .footer-tag {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-faint);
+      border: 1px solid var(--border);
+      padding: 4px 10px;
+      border-radius: 4px;
+    }
+
+    /* ── DIVIDER ── */
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 0;
+    }
+
+    /* ── TERMINAL CHIP ── */
+    .terminal-chip {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--text-faint);
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 6px 14px;
+      margin-bottom: 36px;
+    }
+    .terminal-chip .blink {
+      width: 7px; height: 13px; background: var(--accent); opacity: 0.8;
+      animation: blink 1.1s step-end infinite;
+    }
+    @keyframes blink { 0%, 100% { opacity: 0.8; } 50% { opacity: 0; } }
+
+    @media (max-width: 700px) {
+      nav { padding: 0 20px; }
+      .pcb-stack { transform: scale(0.85); transform-origin: top center; }
+      .step { border-right: none; border-bottom: 1px solid var(--border); }
+      .step:last-child { border-bottom: none; }
+      footer { flex-direction: column; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="#" class="nav-logo">
+    <span class="dot"></span>PCB Card Maker
+  </a>
+  <a href="#editor" class="nav-cta">Open Editor</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-label">PCB Business Cards</div>
+  <h1>Business cards that<br><em>actually impress</em> engineers</h1>
+  <p class="hero-sub">
+    Design real PCB-style business cards in your browser. Pick a board color, lay out your traces, export gerbers — then get them fabricated at any PCB house.
+  </p>
+  <div class="hero-actions">
+    <a href="#editor" class="btn-primary">Start Designing →</a>
+    <a href="#how-it-works" class="btn-ghost">How it works</a>
+  </div>
+</section>
+
+<!-- PCB CARD SHOWCASE -->
+<div class="showcase">
+  <div class="pcb-stack">
+
+    <!-- green card (back) -->
+    <div class="pcb-card">
+      <div class="pcb-traces">
+        <svg width="100%" height="100%" style="position:absolute;inset:0">
+          <line x1="30" y1="0" x2="30" y2="200" stroke="#0d9e52" stroke-width="1" opacity="0.35"/>
+          <line x1="0" y1="60" x2="340" y2="60" stroke="#0d9e52" stroke-width="1" opacity="0.25"/>
+          <circle cx="30" cy="60" r="4" fill="#03865a" opacity="0.5"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- blue card (mid) -->
+    <div class="pcb-card">
+      <div class="pcb-traces">
+        <svg width="100%" height="100%" style="position:absolute;inset:0">
+          <line x1="60" y1="0" x2="60" y2="200" stroke="#1a5cd4" stroke-width="1" opacity="0.4"/>
+          <line x1="0" y1="100" x2="340" y2="100" stroke="#1a5cd4" stroke-width="1" opacity="0.3"/>
+          <circle cx="60" cy="100" r="5" fill="none" stroke="#015bbc" stroke-width="1.5" opacity="0.6"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- black card (front) -->
+    <div class="pcb-card">
+      <div class="pcb-traces">
+        <svg width="100%" height="100%" style="position:absolute;inset:0">
+          <line x1="0" y1="40" x2="200" y2="40" stroke="#6b6e71" stroke-width="1.2" opacity="0.5"/>
+          <line x1="200" y1="40" x2="200" y2="160" stroke="#6b6e71" stroke-width="1.2" opacity="0.5"/>
+          <line x1="200" y1="160" x2="310" y2="160" stroke="#6b6e71" stroke-width="1.2" opacity="0.5"/>
+          <circle cx="200" cy="40" r="4" fill="none" stroke="#6b6e71" stroke-width="1.5" opacity="0.7"/>
+          <circle cx="200" cy="160" r="4" fill="none" stroke="#6b6e71" stroke-width="1.5" opacity="0.7"/>
+        </svg>
+      </div>
+      <div class="pcb-silk">
+        <div class="pcb-name">Alex Ivanova</div>
+        <div class="pcb-role">Embedded Systems Engineer</div>
+      </div>
+      <div class="pcb-silk pcb-contacts">
+        <span>alex@example.io</span>
+        <span>github.com/alex</span>
+      </div>
+      <div class="pcb-pads">
+        <div class="pad"></div>
+        <div class="pad"></div>
+        <div class="pad"></div>
+        <div class="pad"></div>
+      </div>
+      <span class="corner-mark tl">REV 1.0</span>
+      <span class="corner-mark br">JLCPCB</span>
+    </div>
+
+  </div>
+</div>
+
+<hr class="divider">
+
+<!-- FEATURES -->
+<section>
+  <div class="section-label">Features</div>
+  <h2>Everything you need, nothing you don't</h2>
+  <p style="max-width:480px; font-size:15px;">A focused tool built for the one thing: PCB business cards. No bloat, no subscriptions, no learning curve.</p>
+
+  <div class="features-grid">
+
+    <div class="feature">
+      <div class="feature-icon">
+        <svg viewBox="0 0 24 24" width="20" height="20"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+      </div>
+      <h3>Runs in the Browser</h3>
+      <p>No install, no account. Open the editor and start designing immediately. Your data never leaves your machine.</p>
+    </div>
+
+    <div class="feature">
+      <div class="feature-icon">
+        <svg viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg>
+      </div>
+      <h3>7 Board Colors</h3>
+      <p>Choose from authentic solder mask colors — green, black, white, blue, red, yellow, purple — matched to real PCB fab samples.</p>
+    </div>
+
+    <div class="feature">
+      <div class="feature-icon">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+      </div>
+      <h3>Trace Routing</h3>
+      <p>Draw copper traces, place vias and pads just like a real EDA tool. Snap to grid, bend at 45°, keep it clean.</p>
+    </div>
+
+    <div class="feature">
+      <div class="feature-icon">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      </div>
+      <h3>Export to SVG &amp; Gerber</h3>
+      <p>Download production-ready files and upload directly to JLCPCB, PCBWay, or any fab house. Order 5 cards for a few dollars.</p>
+    </div>
+
+    <div class="feature">
+      <div class="feature-icon">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+      </div>
+      <h3>Silkscreen Text</h3>
+      <p>Add your name, email, handle, QR code — whatever fits on a standard 85 × 54 mm business card format.</p>
+    </div>
+
+    <div class="feature">
+      <div class="feature-icon">
+        <svg viewBox="0 0 24 24" width="20" height="20"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>
+      </div>
+      <h3>Gerber Preview</h3>
+      <p>See exactly what your board will look like before ordering. Copper, silkscreen, and board outline rendered accurately.</p>
+    </div>
+
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- BOARD COLORS -->
+<div class="colors-section">
+  <div class="colors-inner">
+    <div class="section-label">Board Colors</div>
+    <h2>Seven authentic solder mask colors</h2>
+    <p style="max-width:480px; font-size:15px; margin-top:12px;">
+      Each color is sampled from real PCB fabrication stock. What you see in the editor is what you get from the fab.
+    </p>
+    <div class="color-swatches">
+      <div class="swatch">
+        <div class="swatch-board" style="background:#066434;"></div>
+        <span class="swatch-label">Green</span>
+      </div>
+      <div class="swatch">
+        <div class="swatch-board" style="background:#18191c;"></div>
+        <span class="swatch-label">Black</span>
+      </div>
+      <div class="swatch">
+        <div class="swatch-board" style="background:#e8e8e0; box-shadow: 0 6px 20px rgba(0,0,0,0.3), inset 0 0 0 1px rgba(0,0,0,0.1);"></div>
+        <span class="swatch-label">White</span>
+      </div>
+      <div class="swatch">
+        <div class="swatch-board" style="background:#073cac;"></div>
+        <span class="swatch-label">Blue</span>
+      </div>
+      <div class="swatch">
+        <div class="swatch-board" style="background:#a92f2e;"></div>
+        <span class="swatch-label">Red</span>
+      </div>
+      <div class="swatch">
+        <div class="swatch-board" style="background:#9c8e03;"></div>
+        <span class="swatch-label">Yellow</span>
+      </div>
+      <div class="swatch">
+        <div class="swatch-board" style="background:#760465;"></div>
+        <span class="swatch-label">Purple</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<hr class="divider">
+
+<!-- HOW IT WORKS -->
+<section id="how-it-works">
+  <div class="section-label">Process</div>
+  <h2>From idea to card in four steps</h2>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">01</div>
+      <h3>Design</h3>
+      <p>Use the drag-and-drop editor to place text, traces, pads, and vias on your card. Choose your board color.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">02</div>
+      <h3>Preview</h3>
+      <p>Toggle between layers and get an accurate render of the finished board before committing anything.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">03</div>
+      <h3>Export</h3>
+      <p>Download your Gerber files. A standard zip package, compatible with every major PCB fabricator.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">04</div>
+      <h3>Order</h3>
+      <p>Upload to JLCPCB, PCBWay, or OSHPark. A batch of 5–10 cards typically costs under $5 with shipping.</p>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- CTA -->
+<section class="cta-section" id="editor">
+  <div class="terminal-chip">
+    <span>pcb-card-maker</span>
+    <div class="blink"></div>
+  </div>
+  <h2>Stop handing out paper. Hand out a PCB.</h2>
+  <p>Open the editor in your browser right now — no sign-up, no credit card.</p>
+  <a href="/" class="btn-primary">Open the Editor →</a>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <span>PCB Card Maker — browser-based PCB business card designer</span>
+  <span class="footer-tag">No account required</span>
+</footer>
+
+</body>
+</html>
