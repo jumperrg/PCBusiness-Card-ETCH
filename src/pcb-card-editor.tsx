@@ -274,13 +274,13 @@ export default function PCBCardEditor() {
 
   // ---- dragging existing elements ----
 
-  const startDrag = (e, el, back = false) => {
+  const startDrag = (e, el, back = false, pointIndex: number | null = null) => {
     if (tool !== "select") return;
     if (e.button !== 0) return;
-    if (e.button === 0) e.stopPropagation();
+    e.stopPropagation();
     setSelectedId(el.id);
     const pt = back ? clientToMMBack(e.clientX, e.clientY) : clientToMM(e.clientX, e.clientY);
-    setDragging({ id: el.id, start: pt, orig: el, back });
+    setDragging({ id: el.id, start: pt, orig: el, back, pointIndex });
   };
 
   const onPointerMove = (e) => {
@@ -290,9 +290,26 @@ export default function PCBCardEditor() {
       setCursorPt(orthoMode && drawingPoints.length > 0 ? snapOrtho(snapped, drawingPoints[drawingPoints.length - 1]) : snapped);
     }
     if (!dragging || dragging.back) return;
+    const orig = dragging.orig;
+    if ((orig.type === "trace" || orig.type === "cutout") && dragging.pointIndex !== null) {
+      // single-joint drag with ortho constraint
+      const pi = dragging.pointIndex;
+      const newPoints = orig.points.map((p: { x: number; y: number }, i: number) => {
+        if (i !== pi) return p;
+        const snapped = snapPt(pt);
+        if (orthoMode) {
+          const prev = orig.points[pi - 1];
+          const next = orig.points[pi + 1];
+          const anchor = prev ?? next;
+          return anchor ? snapOrtho(snapped, anchor) : snapped;
+        }
+        return snapped;
+      });
+      updateElement(dragging.id, { points: newPoints });
+      return;
+    }
     const dx = snapDelta(pt.x - dragging.start.x);
     const dy = snapDelta(pt.y - dragging.start.y);
-    const orig = dragging.orig;
     if (orig.type === "trace" || orig.type === "cutout") {
       updateElement(dragging.id, {
         points: orig.points.map((p) => ({ x: p.x + dx, y: p.y + dy })),
@@ -723,9 +740,25 @@ export default function PCBCardEditor() {
                   setCursorPt(orthoMode && drawingPoints.length > 0 ? snapOrtho(snapped, drawingPoints[drawingPoints.length - 1]) : snapped);
                 }
                 if (!dragging || !dragging.back) return;
+                const orig = dragging.orig;
+                if ((orig.type === "trace" || orig.type === "cutout") && dragging.pointIndex !== null) {
+                  const pi = dragging.pointIndex;
+                  const newPoints = orig.points.map((p: { x: number; y: number }, i: number) => {
+                    if (i !== pi) return p;
+                    const snapped = snapPt(pt);
+                    if (orthoMode) {
+                      const prev = orig.points[pi - 1];
+                      const next = orig.points[pi + 1];
+                      const anchor = prev ?? next;
+                      return anchor ? snapOrtho(snapped, anchor) : snapped;
+                    }
+                    return snapped;
+                  });
+                  updateElement(dragging.id, { points: newPoints });
+                  return;
+                }
                 const dx = snapDelta(pt.x - dragging.start.x);
                 const dy = snapDelta(pt.y - dragging.start.y);
-                const orig = dragging.orig;
                 if (orig.type === "trace" || orig.type === "cutout") {
                   updateElement(dragging.id, { points: orig.points.map((p: { x: number, y: number }) => ({ x: p.x + dx, y: p.y + dy })) });
                 } else {
@@ -959,7 +992,17 @@ export default function PCBCardEditor() {
 
     if (el.type === "trace") {
       return (
-        <g key={el.id} onPointerDown={(e) => startDrag(e, el, isBack)} onClick={(e) => { if (tool === "select") e.stopPropagation(); }} onContextMenu={onRMB} style={{ cursor: "move" }}>
+        <g key={el.id} onClick={(e) => { if (tool === "select") e.stopPropagation(); }} onContextMenu={onRMB}>
+          {/* hit-area + body — whole-trace drag when not clicking a joint */}
+          <path
+            d={cuPath(el.points, false)}
+            fill="none"
+            stroke="transparent"
+            strokeWidth={Math.max(el.width + 1.5, 2.5)}
+            strokeLinecap="round"
+            style={{ cursor: tool === "select" ? "move" : "inherit" }}
+            onPointerDown={(e) => startDrag(e, el, isBack, null)}
+          />
           <path
             d={cuPath(el.points, false)}
             fill="none"
@@ -967,18 +1010,33 @@ export default function PCBCardEditor() {
             strokeWidth={el.width}
             strokeLinecap="round"
             strokeLinejoin="round"
+            style={{ pointerEvents: "none" }}
           />
           {isSelected && (
             <path d={cuPath(el.points, false)} fill="none" stroke="#9ba3a8" strokeWidth={el.width + 0.3}
-              strokeOpacity={0.35} strokeLinecap="round" />
+              strokeOpacity={0.35} strokeLinecap="round" style={{ pointerEvents: "none" }} />
           )}
+          {/* joint handles */}
+          {isSelected && el.points.map((p: { x: number; y: number }, i: number) => (
+            <circle
+              key={i}
+              cx={p.x}
+              cy={p.y}
+              r={0.7}
+              fill="#1a1c1e"
+              stroke="#9ba3a8"
+              strokeWidth={0.2}
+              style={{ cursor: tool === "select" ? "grab" : "inherit" }}
+              onPointerDown={(e) => startDrag(e, el, isBack, i)}
+            />
+          ))}
         </g>
       );
     }
     if (el.type === "pad") {
       const fill = "#c8ccd0";
       return (
-        <g key={el.id} onPointerDown={(e) => startDrag(e, el, isBack)} onClick={(e) => { if (tool === "select") e.stopPropagation(); }} onContextMenu={onRMB} style={{ cursor: "move" }}>
+        <g key={el.id} onPointerDown={(e) => startDrag(e, el, isBack)} onClick={(e) => { if (tool === "select") e.stopPropagation(); }} onContextMenu={onRMB} style={{ cursor: tool === "select" ? "move" : "inherit" }}>
           {el.kind === "tht" ? (
             <>
               <circle cx={el.x} cy={el.y} r={el.size / 2} fill={fill} {...strokeSel} />
@@ -1021,14 +1079,14 @@ export default function PCBCardEditor() {
           onPointerDown={(e) => startDrag(e, el, isBack)}
           onClick={(e) => { if (tool === "select") e.stopPropagation(); }}
           onContextMenu={onRMB}
-          style={{ cursor: "move" }}
+          style={{ cursor: tool === "select" ? "move" : "inherit" }}
           opacity={0.92}
         />
       );
     }
     if (el.type === "hole") {
       return (
-        <g key={el.id} onPointerDown={(e) => startDrag(e, el, isBack)} onClick={(e) => { if (tool === "select") e.stopPropagation(); }} onContextMenu={onRMB} style={{ cursor: "move" }}>
+        <g key={el.id} onPointerDown={(e) => startDrag(e, el, isBack)} onClick={(e) => { if (tool === "select") e.stopPropagation(); }} onContextMenu={onRMB} style={{ cursor: tool === "select" ? "move" : "inherit" }}>
           <circle cx={el.x} cy={el.y} r={el.diameter / 2} fill="#18191b" stroke={el.plated ? boardColor.copper : "#6b6e71"}
             strokeWidth={0.25} {...strokeSel} />
         </g>
@@ -1045,7 +1103,7 @@ export default function PCBCardEditor() {
           onPointerDown={(e) => startDrag(e, el, isBack)}
           onClick={(e) => { if (tool === "select") e.stopPropagation(); }}
           onContextMenu={onRMB}
-          style={{ cursor: "move" }}
+          style={{ cursor: tool === "select" ? "move" : "inherit" }}
         />
       );
     }
