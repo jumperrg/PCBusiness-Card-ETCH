@@ -1,5 +1,6 @@
 ﻿import React, { useState, useRef, useCallback } from "react";
 import { UI, BOARD_COLORS } from "./colors";
+import { listProjects, saveProject, deleteProject, type SavedProject } from "./projectStore";
 import {
   MousePointer2,
   Spline,
@@ -13,6 +14,8 @@ import {
   Trash2,
   FolderOpen,
   Save,
+  X,
+  BookOpen,
 } from "lucide-react";
 
 // ---- constants -------------------------------------------------------
@@ -49,9 +52,17 @@ const uid = () => `el_${uidCounter++}`;
 
 // ---- component ---------------------------------------------------------
 
-export default function PCBCardEditor() {
-  const [board, setBoard] = useState({ width: 85, height: 54, corner: 3 });
-  const [elements, setElements] = useState([]);
+export interface PCBProject {
+  version: number
+  board: { width: number; height: number; corner: number }
+  boardColorKey: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  elements: any[]
+}
+
+export default function PCBCardEditor({ initialProject }: { initialProject?: PCBProject }) {
+  const [board, setBoard] = useState(initialProject?.board ?? { width: 85, height: 54, corner: 3 });
+  const [elements, setElements] = useState<any[]>(initialProject?.elements ?? []);
   const [tool, setTool] = useState("select");
   const [activeLayer, setActiveLayer] = useState("top");
   const [layersOpen, setLayersOpen] = useState(true);
@@ -75,7 +86,60 @@ export default function PCBCardEditor() {
   const [snapEnabled, setSnapEnabled] = useState(true);
   const [orthoMode, setOrthoMode] = useState(false);
   const [showDots, setShowDots] = useState(true);
-  const [boardColorKey, setBoardColorKey] = useState("green");
+  const [boardColorKey, setBoardColorKey] = useState(initialProject?.boardColorKey ?? "green");
+
+  // ---- project system ----
+  const [projectId, setProjectId] = useState<string | undefined>(undefined);
+  const [projectName, setProjectName] = useState("Untitled");
+  const [showProjects, setShowProjects] = useState(false);
+  const [projects, setProjects] = useState<SavedProject[]>(() => listProjects());
+  const [editingName, setEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState("Untitled");
+
+  const refreshProjects = () => setProjects(listProjects());
+
+  const currentProject = (): PCBProject => ({ version: 1, board, boardColorKey, elements });
+
+  const handleSave = () => {
+    const saved = saveProject(projectName, currentProject(), projectId);
+    setProjectId(saved.id);
+    refreshProjects();
+  };
+
+  const handleOpenProject = (entry: SavedProject) => {
+    setBoard(entry.project.board);
+    setBoardColorKey(entry.project.boardColorKey);
+    setElements(entry.project.elements);
+    setSelectedId(null);
+    setProjectId(entry.id);
+    setProjectName(entry.name);
+    setNameInput(entry.name);
+    setShowProjects(false);
+  };
+
+  const handleDeleteProject = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    deleteProject(id);
+    refreshProjects();
+    if (id === projectId) { setProjectId(undefined); setProjectName("Untitled"); }
+  };
+
+  const handleNewProject = () => {
+    setBoard({ width: 85, height: 54, corner: 3 });
+    setBoardColorKey("green");
+    setElements([]);
+    setSelectedId(null);
+    setProjectId(undefined);
+    setProjectName("Untitled");
+    setNameInput("Untitled");
+    setShowProjects(false);
+  };
+
+  const commitName = () => {
+    const n = nameInput.trim() || "Untitled";
+    setProjectName(n);
+    setEditingName(false);
+  };
   const boardColor = BOARD_COLORS.find((c) => c.key === boardColorKey)!;
   const boardBorder = { stroke: "#ffffff60", strokeWidth: 2, vectorEffect: "non-scaling-stroke" } as const;
   const svgRef = useRef(null);
@@ -434,37 +498,63 @@ export default function PCBCardEditor() {
         style={{ borderColor: UI.border, background: UI.bgPanel }}
       >
         <div className="flex items-center gap-3">
-          <div
-            className="w-2.5 h-2.5 rounded-full"
-            style={{ background: UI.textMuted, boxShadow: `0 0 8px ${UI.borderSub}` }}
-          />
-          <span className="font-mono tracking-widest text-[15px]" style={{ color: UI.textMuted }}>
-            ETCH
-          </span>
-          <span className="text-[14px]" style={{ color: UI.textFaint }}>
-            / business-card.pcb
-          </span>
+          <div className="w-2.5 h-2.5 rounded-full" style={{ background: UI.accent }} />
+          <span className="font-mono tracking-widest text-[15px]" style={{ color: UI.textMuted }}>ETCH</span>
+          <span style={{ color: UI.textFaint, fontSize: 14 }}>/</span>
+          {editingName ? (
+            <input
+              autoFocus
+              value={nameInput}
+              onChange={e => setNameInput(e.target.value)}
+              onBlur={commitName}
+              onKeyDown={e => { if (e.key === 'Enter') commitName(); if (e.key === 'Escape') setEditingName(false); }}
+              className="font-mono text-[14px] bg-transparent border-b outline-none px-1"
+              style={{ color: UI.textPrimary, borderColor: UI.accent, width: Math.max(120, nameInput.length * 8) }}
+            />
+          ) : (
+            <button
+              onClick={() => { setNameInput(projectName); setEditingName(true); }}
+              className="font-mono text-[14px] hover:underline"
+              style={{ color: UI.textFaint, background: 'none', border: 'none', cursor: 'text' }}
+            >
+              {projectName}.pcb
+            </button>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowProjects(p => !p)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded font-mono text-[15px] tracking-wide"
+            style={{ background: showProjects ? UI.bgChipOn : 'transparent', color: UI.textMuted, border: `1px solid ${showProjects ? UI.border : 'transparent'}` }}
+          >
+            <BookOpen size={13} strokeWidth={2.5} />
+            PROJECTS
+          </button>
+          <button
+            onClick={handleSave}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded font-mono text-[15px] tracking-wide"
+            style={{ background: UI.bgChipOn, color: UI.textMuted, border: `1px solid ${UI.borderSub}` }}
+          >
+            <Save size={13} strokeWidth={2.5} />
+            SAVE
+          </button>
           <button
             onClick={exportProject}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded font-mono text-[15px] tracking-wide"
             style={{ background: UI.bgChipOn, color: UI.textMuted, border: `1px solid ${UI.borderSub}` }}
           >
-            <Save size={13} strokeWidth={2.5} />
-            SAVE JSON
+            <Download size={13} strokeWidth={2.5} />
+            EXPORT JSON
           </button>
           <label
             className="flex items-center gap-1.5 px-3 py-1.5 rounded font-mono text-[15px] tracking-wide cursor-pointer"
             style={{ background: UI.bgChipOn, color: UI.textMuted, border: `1px solid ${UI.borderSub}` }}
           >
             <FolderOpen size={13} strokeWidth={2.5} />
-            LOAD JSON
+            IMPORT JSON
             <input
-              type="file"
-              accept=".json"
-              className="hidden"
+              type="file" accept=".json" className="hidden"
               onChange={(e) => { if (e.target.files?.[0]) { importProject(e.target.files[0]); e.target.value = ""; } }}
             />
           </label>
@@ -477,6 +567,60 @@ export default function PCBCardEditor() {
           </button>
         </div>
       </div>
+
+      {/* Projects panel */}
+      {showProjects && (
+        <div
+          className="absolute top-[45px] right-0 z-50 flex flex-col"
+          style={{ width: 320, background: UI.bgPanel, borderLeft: `1px solid ${UI.border}`, borderBottom: `1px solid ${UI.border}`, maxHeight: 'calc(100vh - 45px)', overflowY: 'auto' }}
+        >
+          <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: UI.border }}>
+            <span className="font-mono text-[12px] tracking-widest" style={{ color: UI.textFaint }}>PROJECTS</span>
+            <button
+              onClick={handleNewProject}
+              className="font-mono text-[12px] px-2 py-1 rounded"
+              style={{ background: UI.accent, color: '#fff', border: 'none' }}
+            >
+              + NEW
+            </button>
+          </div>
+          <button
+            onClick={handleSave}
+            className="flex items-center justify-center gap-2 mx-4 my-3 py-2 rounded font-mono text-[13px] tracking-wide w-[calc(100%-32px)]"
+            style={{ background: UI.bgChipOn, color: UI.textMuted, border: `1px solid ${UI.borderSub}` }}
+          >
+            <Save size={13} strokeWidth={2.5} />
+            SAVE CURRENT PROJECT
+          </button>
+          {projects.length === 0 && (
+            <div className="px-4 pb-6 text-center font-mono text-[13px]" style={{ color: UI.textFaint }}>
+              No saved projects yet.
+            </div>
+          )}
+          {projects.map(p => (
+            <button
+              key={p.id}
+              onClick={() => handleOpenProject(p)}
+              className="flex items-center justify-between px-4 py-3 border-b text-left w-full group"
+              style={{ borderColor: UI.borderSub, background: p.id === projectId ? UI.bgChipOn : 'transparent', border: 'none', borderBottom: `1px solid ${UI.borderSub}` }}
+            >
+              <div>
+                <div className="font-mono text-[13px]" style={{ color: p.id === projectId ? UI.textPrimary : UI.textMuted }}>{p.name}</div>
+                <div className="font-mono text-[11px] mt-0.5" style={{ color: UI.textFaint }}>
+                  {p.project.boardColorKey} · {new Date(p.savedAt).toLocaleDateString()}
+                </div>
+              </div>
+              <button
+                onClick={(e) => handleDeleteProject(p.id, e)}
+                className="opacity-0 group-hover:opacity-100 p-1 rounded"
+                style={{ color: UI.danger, background: 'none', border: 'none', transition: 'opacity 0.15s' }}
+              >
+                <X size={13} />
+              </button>
+            </button>
+          ))}
+        </div>
+      )}
 
 
       {/* Second bar: layers, PCB color, grid */}

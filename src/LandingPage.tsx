@@ -3,6 +3,7 @@ import { BOARD_COLORS } from './colors'
 
 interface Props {
   onStart: () => void
+  onGallery: () => void
 }
 
 const CARD_REST = [
@@ -16,7 +17,7 @@ const CARD_HOVER = [
   'rotate(0deg)    translateY(-4px)',
 ]
 
-export default function LandingPage({ onStart }: Props) {
+export default function LandingPage({ onStart, onGallery }: Props) {
   const [hovered, setHovered] = useState(false)
 
   return (
@@ -43,7 +44,7 @@ export default function LandingPage({ onStart }: Props) {
             </p>
             <div className="hero-actions">
               <button className="btn-primary btn-lg" onClick={onStart}>Start Editing →</button>
-              <a className="btn-ghost btn-lg" href="#how-it-works">How it works</a>
+              <button className="btn-ghost btn-lg" onClick={onGallery}>Explore Gallery</button>
             </div>
           </div>
           <div

@@ -1,0 +1,13 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <script>
+      // Redirect to index.html preserving the path as a query param,
+      // then the app reads it back on load.
+      var base = '/PCBusiness-Card-ETCH';
+      var path = window.location.pathname.slice(base.length) || '/';
+      window.location.replace(base + '/?r=' + encodeURIComponent(path));
+    </script>
+  </head>
+</html>
