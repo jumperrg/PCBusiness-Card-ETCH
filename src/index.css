@@ -149,18 +149,26 @@ body:has(.landing) #root {
 .btn-lg { padding: 14px 32px; font-size: 14px; }
 
 .btn-ghost {
-  color: var(--ltext-muted);
+  color: #7ee8fa;
   font-family: var(--lmono);
   font-size: 14px;
-  letter-spacing: 0.05em;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   text-decoration: none;
   padding: 14px 28px;
-  border: 1px solid var(--lborder);
-  border-radius: 5px;
-  transition: border-color 0.2s, color 0.2s;
+  border: 1.5px solid #7ee8fa88;
+  border-radius: 4px;
+  background: linear-gradient(135deg, rgba(126,232,250,0.08), rgba(168,85,247,0.08));
+  transition: border-color 0.2s, background 0.2s, color 0.2s, box-shadow 0.2s;
   display: inline-block;
 }
-.btn-ghost:hover { border-color: var(--ltext-faint); color: var(--ltext); }
+.btn-ghost:hover {
+  color: #a8f5ff;
+  border-color: #7ee8facc;
+  background: linear-gradient(135deg, rgba(126,232,250,0.16), rgba(168,85,247,0.16));
+  box-shadow: 0 0 18px rgba(126,232,250,0.2);
+}
 
 /* HERO */
 .hero {
@@ -459,15 +467,26 @@ body:has(.landing) #root {
 
 @media (max-width: 900px) {
   .hero { padding: 100px 24px 60px; }
-  .hero-inner { flex-direction: column; align-items: flex-start; gap: 48px; }
+  .hero-inner { flex-direction: column; align-items: center; gap: 48px; }
+  .hero-text { text-align: center; }
+  .hero-label { justify-content: center; }
+  .hero-sub { margin-left: auto; margin-right: auto; }
+  .hero-actions { justify-content: center; }
   .pcb-stack { width: 100%; }
+  .lsection { padding: 60px 20px; }
+  .colors-section { padding: 60px 20px; }
+  .cta-section { padding: 72px 20px; }
 }
 @media (max-width: 700px) {
   .lnav { padding: 0 20px; }
-  .pcb-stack { transform: scale(0.82); transform-origin: top left; }
+  .pcb-stack { transform: scale(0.75); transform-origin: top center; height: 210px; }
   .step { border-right: none; border-bottom: 1px solid var(--lborder); }
   .step:last-child { border-bottom: none; }
-  .lfooter { flex-direction: column; text-align: center; }
+  .lfooter { flex-direction: column; text-align: center; padding: 24px 20px; }
+  .features-grid { grid-template-columns: 1fr; }
+  .color-swatches { justify-content: center; }
+  .gallery-header { padding: 80px 20px 32px; }
+  .gallery-grid { padding: 0 20px 60px; gap: 16px; }
 }
 
 h1,

@@ -16,6 +16,8 @@ import {
   Save,
   X,
   BookOpen,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 // ---- constants -------------------------------------------------------
@@ -66,6 +68,7 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
   const [tool, setTool] = useState("select");
   const [activeLayer, setActiveLayer] = useState("top");
   const [layersOpen, setLayersOpen] = useState(true);
+  const [specOpen, setSpecOpen] = useState(true);
   const [layerVis, setLayerVis] = useState({
     topSilk: true,
     topCopper: true,
@@ -1071,21 +1074,32 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
 
         {/* Properties panel - floating */}
         <div
-          className="absolute right-3 top-4 z-20 w-64 flex flex-col rounded-xl overflow-hidden"
+          className="absolute right-3 top-4 z-20 flex flex-col rounded-xl overflow-hidden"
           style={{
             background: UI.bgPanel,
             border: `1px solid ${UI.border}`,
             boxShadow: "0 8px 32px 0 rgba(0,0,0,0.6), 0 0 0 1px rgba(201,168,76,0.12)",
             maxHeight: "calc(100% - 2rem)",
+            width: specOpen ? "16rem" : "auto",
+            transition: "width 0.2s ease",
           }}
         >
-          <div
-            className="px-3 py-2 border-b font-mono text-[14px] tracking-widest"
-            style={{ borderColor: UI.border, color: UI.textFaint }}
+          <button
+            className="px-3 py-2 font-mono text-[14px] tracking-widest flex items-center justify-between gap-2 w-full"
+            style={{ borderBottom: specOpen ? `1px solid ${UI.border}` : "none", color: UI.textFaint, background: "transparent", whiteSpace: "nowrap" }}
+            onClick={() => setSpecOpen(o => !o)}
           >
-            {selected ? selected.type.toUpperCase() + " — SPEC" : "BOARD — SPEC"}
-          </div>
-          <div className="p-3 flex flex-col gap-3 overflow-y-auto">
+            <span>{specOpen ? (selected ? selected.type.toUpperCase() + " — SPEC" : "BOARD — SPEC") : ""}</span>
+            <span style={{
+              display: "flex", alignItems: "center", justifyContent: "center",
+              width: 22, height: 22, borderRadius: 5,
+              background: UI.bgChipOn, border: `1px solid ${UI.border}`,
+              color: UI.textPrimary, flexShrink: 0,
+            }}>
+              {specOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </span>
+          </button>
+          {specOpen && <div className="p-3 flex flex-col gap-3 overflow-y-auto">
             {!selected && <BoardProps board={board} setBoard={setBoard} />}
             {selected?.type === "trace" && (
               <NumberField label="Width (mm)" value={selected.width} step={0.05} min={0.1}
@@ -1113,7 +1127,7 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
                 <Trash2 size={13} /> DELETE ELEMENT
               </button>
             )}
-          </div>
+          </div>}
         </div>
       </div>
     </div>
@@ -1297,7 +1311,7 @@ function BoardProps({ board, setBoard }) {
           className="w-full px-2 py-1.5 rounded font-mono text-[15px]"
           style={{ background: UI.bgChipOn, color: UI.accentDark }}
         >
-          Standard 85 Ã— 54mm
+          Standard 85 × 54mm
         </button>
       </div>
     </>
