@@ -428,6 +428,7 @@ body:has(.landing) #root {
 .gallery-item {
   background: none; border: none; padding: 0; cursor: pointer;
   text-align: left; display: flex; flex-direction: column; gap: 12px;
+  position: relative;
 }
 .gallery-item:hover .gallery-card {
   transform: translateY(-4px);

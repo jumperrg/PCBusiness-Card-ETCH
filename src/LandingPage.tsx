@@ -4,6 +4,7 @@ import { BOARD_COLORS } from './colors'
 interface Props {
   onStart: () => void
   onGallery: () => void
+  onProjects: () => void
 }
 
 const CARD_REST = [
@@ -17,7 +18,7 @@ const CARD_HOVER = [
   'rotate(0deg)    translateY(-4px)',
 ]
 
-export default function LandingPage({ onStart, onGallery }: Props) {
+export default function LandingPage({ onStart, onGallery, onProjects }: Props) {
   const [hovered, setHovered] = useState(false)
 
   return (
@@ -28,7 +29,10 @@ export default function LandingPage({ onStart, onGallery }: Props) {
           <span className="lnav-dot" />
           PCB Card Maker
         </span>
-        <button className="btn-primary" onClick={onStart}>Start Editing</button>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button className="btn-ghost" onClick={onProjects} style={{ padding: '8px 16px', fontSize: 13 }}>My Projects</button>
+          <button className="btn-primary" onClick={onStart}>Start Editing</button>
+        </div>
       </nav>
 
       {/* HERO */}

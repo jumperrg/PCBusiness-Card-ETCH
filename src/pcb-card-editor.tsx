@@ -1,6 +1,6 @@
-﻿import React, { useState, useRef, useCallback } from "react";
+﻿import React, { useState, useRef, useCallback, useEffect } from "react";
 import { UI, BOARD_COLORS } from "./colors";
-import { listProjects, saveProject, deleteProject, type SavedProject } from "./projectStore";
+import { listProjects, saveProject, deleteProject, seedProjectsOnce, type SavedProject } from "./projectStore";
 import {
   MousePointer2,
   Spline,
@@ -63,8 +63,8 @@ export interface PCBProject {
 }
 
 export default function PCBCardEditor({ initialProject }: { initialProject?: PCBProject }) {
-  const [board, setBoard] = useState(initialProject?.board ?? { width: 85, height: 54, corner: 3 });
-  const [elements, setElements] = useState<any[]>(initialProject?.elements ?? []);
+  const [board, setBoard] = useState({ width: 85, height: 54, corner: 3 });
+  const [elements, setElements] = useState<any[]>([]);
   const [tool, setTool] = useState("select");
   const [activeLayer, setActiveLayer] = useState("top");
   const [layersOpen, setLayersOpen] = useState(true);
@@ -89,15 +89,17 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
   const [snapEnabled, setSnapEnabled] = useState(true);
   const [orthoMode, setOrthoMode] = useState(false);
   const [showDots, setShowDots] = useState(true);
-  const [boardColorKey, setBoardColorKey] = useState(initialProject?.boardColorKey ?? "green");
+  const [boardColorKey, setBoardColorKey] = useState("green");
 
   // ---- project system ----
   const [projectId, setProjectId] = useState<string | undefined>(undefined);
   const [projectName, setProjectName] = useState("Untitled");
   const [showProjects, setShowProjects] = useState(false);
-  const [projects, setProjects] = useState<SavedProject[]>(() => listProjects());
+  const [projects, setProjects] = useState<SavedProject[]>(() => { seedProjectsOnce(); return listProjects(); });
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState("Untitled");
+
+  useEffect(() => { if (initialProject) applyProject(initialProject); }, []);
 
   const refreshProjects = () => setProjects(listProjects());
 
@@ -109,11 +111,22 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
     refreshProjects();
   };
 
+  const applyProject = (p: PCBProject) => {
+    if (p.board) setBoard(p.board);
+    if (p.boardColorKey) setBoardColorKey(p.boardColorKey);
+    if (Array.isArray(p.elements)) {
+      const normalized = p.elements.map((e: any) => {
+        if (e.layer === 'topSilk' || e.layer === 'topCopper') return { ...e, layer: 'top' }
+        if (e.layer === 'bottomSilk' || e.layer === 'bottomCopper') return { ...e, layer: 'bottom' }
+        return e
+      })
+      setElements(normalized)
+      setSelectedId(null)
+    }
+  };
+
   const handleOpenProject = (entry: SavedProject) => {
-    setBoard(entry.project.board);
-    setBoardColorKey(entry.project.boardColorKey);
-    setElements(entry.project.elements);
-    setSelectedId(null);
+    applyProject(entry.project);
     setProjectId(entry.id);
     setProjectName(entry.name);
     setNameInput(entry.name);
@@ -456,17 +469,8 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
   const importProject = (file: File) => {
     const reader = new FileReader();
     reader.onload = () => {
-      try {
-        const parsed = JSON.parse(reader.result as string);
-        if (parsed.board) setBoard(parsed.board);
-        if (parsed.boardColorKey) setBoardColorKey(parsed.boardColorKey);
-        if (Array.isArray(parsed.elements)) {
-          setElements(parsed.elements);
-          setSelectedId(null);
-        }
-      } catch {
-        alert("Invalid project file.");
-      }
+      try { applyProject(JSON.parse(reader.result as string)); }
+      catch { alert("Invalid project file."); }
     };
     reader.readAsText(file);
   };
@@ -502,7 +506,7 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
       >
         <div className="flex items-center gap-3">
           <div className="w-2.5 h-2.5 rounded-full" style={{ background: UI.accent }} />
-          <span className="font-mono tracking-widest text-[15px]" style={{ color: UI.textMuted }}>ETCH</span>
+          <span className="font-mono tracking-widest text-[15px] cursor-pointer" style={{ color: UI.textMuted }} onClick={() => window.location.href = '/'}>ETCH</span>
           <span style={{ color: UI.textFaint, fontSize: 14 }}>/</span>
           {editingName ? (
             <input
@@ -520,7 +524,7 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
               className="font-mono text-[14px] hover:underline"
               style={{ color: UI.textFaint, background: 'none', border: 'none', cursor: 'text' }}
             >
-              {projectName}.pcb
+              {projectName}
             </button>
           )}
         </div>

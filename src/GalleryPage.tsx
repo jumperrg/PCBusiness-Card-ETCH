@@ -1,5 +1,6 @@
 import { BOARD_COLORS, type BoardColorKey } from './colors'
 import { type PCBProject } from './pcb-card-editor'
+import { saveProject } from './projectStore'
 
 interface Props {
   onBack: () => void
@@ -13,6 +14,17 @@ interface GalleryEntry {
   authorRole: string
 }
 
+function normalizeLayersForThumb(project: PCBProject): PCBProject {
+  return {
+    ...project,
+    elements: project.elements.map((e: any) => {
+      if (e.layer === 'top') return { ...e, layer: e.type === 'text' ? 'topSilk' : 'topCopper' }
+      if (e.layer === 'bottom') return { ...e, layer: 'bottomCopper' }
+      return e
+    }),
+  }
+}
+
 let _id = 1
 const uid = () => String(_id++)
 
@@ -22,15 +34,15 @@ const GALLERY: GalleryEntry[] = [
     project: {
       version: 1, board: { width: 85, height: 54, corner: 3 }, boardColorKey: 'green',
       elements: [
-        { id: uid(), type: 'text', layer: 'topSilk', x: 14, y: 16, content: 'Ada Lovelace', font: 'sans', size: 4 },
-        { id: uid(), type: 'text', layer: 'topSilk', x: 14, y: 23, content: 'Firmware Engineer', font: 'sans', size: 2.5 },
-        { id: uid(), type: 'text', layer: 'topSilk', x: 14, y: 38, content: 'ada@lovelace.io', font: 'sans', size: 2 },
-        { id: uid(), type: 'text', layer: 'topSilk', x: 14, y: 43, content: 'github.com/ada', font: 'sans', size: 2 },
-        { id: uid(), type: 'trace', layer: 'topCopper', points: [{ x: 5, y: 5 }, { x: 40, y: 5 }, { x: 40, y: 25 }], width: 0.3 },
-        { id: uid(), type: 'trace', layer: 'topCopper', points: [{ x: 40, y: 25 }, { x: 80, y: 25 }], width: 0.3 },
-        { id: uid(), type: 'pad', kind: 'smd', layer: 'topCopper', x: 78, y: 14, shape: 'rect', w: 1.6, h: 1.2 },
-        { id: uid(), type: 'pad', kind: 'smd', layer: 'topCopper', x: 78, y: 18, shape: 'rect', w: 1.6, h: 1.2 },
-        { id: uid(), type: 'pad', kind: 'smd', layer: 'topCopper', x: 78, y: 22, shape: 'rect', w: 1.6, h: 1.2 },
+        { id: uid(), type: 'text', layer: 'top', x: 14, y: 16, content: 'Ada Lovelace', font: 'sans', size: 4 },
+        { id: uid(), type: 'text', layer: 'top', x: 14, y: 23, content: 'Firmware Engineer', font: 'sans', size: 2.5 },
+        { id: uid(), type: 'text', layer: 'top', x: 14, y: 38, content: 'ada@lovelace.io', font: 'mono', size: 2 },
+        { id: uid(), type: 'text', layer: 'top', x: 14, y: 43, content: 'github.com/ada', font: 'mono', size: 2 },
+        { id: uid(), type: 'trace', layer: 'top', points: [{ x: 5, y: 5 }, { x: 40, y: 5 }, { x: 40, y: 25 }], width: 0.3 },
+        { id: uid(), type: 'trace', layer: 'top', points: [{ x: 40, y: 25 }, { x: 80, y: 25 }], width: 0.3 },
+        { id: uid(), type: 'pad', kind: 'smd', layer: 'top', x: 78, y: 14, shape: 'rect', w: 1.6, h: 1.2 },
+        { id: uid(), type: 'pad', kind: 'smd', layer: 'top', x: 78, y: 18, shape: 'rect', w: 1.6, h: 1.2 },
+        { id: uid(), type: 'pad', kind: 'smd', layer: 'top', x: 78, y: 22, shape: 'rect', w: 1.6, h: 1.2 },
       ],
     },
   },
@@ -39,15 +51,16 @@ const GALLERY: GalleryEntry[] = [
     project: {
       version: 1, board: { width: 85, height: 54, corner: 3 }, boardColorKey: 'blue',
       elements: [
-        { id: uid(), type: 'text', layer: 'topSilk', x: 14, y: 16, content: 'Max Planck', font: 'sans', size: 4 },
-        { id: uid(), type: 'text', layer: 'topSilk', x: 14, y: 23, content: 'RF / Antenna Design', font: 'sans', size: 2.5 },
-        { id: uid(), type: 'text', layer: 'topSilk', x: 14, y: 38, content: 'max@planck.dev', font: 'sans', size: 2 },
-        { id: uid(), type: 'trace', layer: 'topCopper', points: [{ x: 8, y: 8 }, { x: 8, y: 46 }], width: 0.3 },
-        { id: uid(), type: 'trace', layer: 'topCopper', points: [{ x: 8, y: 27 }, { x: 77, y: 27 }], width: 0.3 },
-        { id: uid(), type: 'pad', kind: 'smd', layer: 'topCopper', x: 78, y: 14, shape: 'rect', w: 1.6, h: 1.2 },
-        { id: uid(), type: 'pad', kind: 'smd', layer: 'topCopper', x: 78, y: 18, shape: 'rect', w: 1.6, h: 1.2 },
-        { id: uid(), type: 'pad', kind: 'smd', layer: 'topCopper', x: 78, y: 22, shape: 'rect', w: 1.6, h: 1.2 },
-        { id: uid(), type: 'pad', kind: 'smd', layer: 'topCopper', x: 78, y: 26, shape: 'rect', w: 1.6, h: 1.2 },
+        { id: uid(), type: 'text', layer: 'top', x: 14, y: 16, content: 'Max Planck', font: 'sans', size: 4 },
+        { id: uid(), type: 'text', layer: 'top', x: 14, y: 23, content: 'RF / Antenna Design', font: 'sans', size: 2.5 },
+        { id: uid(), type: 'text', layer: 'top', x: 14, y: 38, content: 'max@planck.dev', font: 'mono', size: 2 },
+        { id: uid(), type: 'text', layer: 'top', x: 14, y: 43, content: 'planck-rf.com', font: 'mono', size: 2 },
+        { id: uid(), type: 'trace', layer: 'top', points: [{ x: 8, y: 8 }, { x: 8, y: 46 }], width: 0.3 },
+        { id: uid(), type: 'trace', layer: 'top', points: [{ x: 8, y: 27 }, { x: 77, y: 27 }], width: 0.3 },
+        { id: uid(), type: 'pad', kind: 'smd', layer: 'top', x: 78, y: 14, shape: 'rect', w: 1.6, h: 1.2 },
+        { id: uid(), type: 'pad', kind: 'smd', layer: 'top', x: 78, y: 18, shape: 'rect', w: 1.6, h: 1.2 },
+        { id: uid(), type: 'pad', kind: 'smd', layer: 'top', x: 78, y: 22, shape: 'rect', w: 1.6, h: 1.2 },
+        { id: uid(), type: 'pad', kind: 'smd', layer: 'top', x: 78, y: 26, shape: 'rect', w: 1.6, h: 1.2 },
       ],
     },
   },
@@ -56,13 +69,14 @@ const GALLERY: GalleryEntry[] = [
     project: {
       version: 1, board: { width: 85, height: 54, corner: 3 }, boardColorKey: 'black',
       elements: [
-        { id: uid(), type: 'text', layer: 'topSilk', x: 14, y: 16, content: 'Lise Meitner', font: 'sans', size: 4 },
-        { id: uid(), type: 'text', layer: 'topSilk', x: 14, y: 23, content: 'PCB Layout Artist', font: 'sans', size: 2.5 },
-        { id: uid(), type: 'text', layer: 'topSilk', x: 14, y: 38, content: 'lise@meitner.io', font: 'sans', size: 2 },
-        { id: uid(), type: 'trace', layer: 'topCopper', points: [{ x: 5, y: 49 }, { x: 60, y: 49 }, { x: 60, y: 5 }, { x: 80, y: 5 }], width: 0.3 },
-        { id: uid(), type: 'trace', layer: 'bottomCopper', points: [{ x: 5, y: 5 }, { x: 30, y: 5 }, { x: 30, y: 49 }], width: 0.3 },
-        { id: uid(), type: 'pad', kind: 'smd', layer: 'topCopper', x: 78, y: 14, shape: 'rect', w: 1.6, h: 1.2 },
-        { id: uid(), type: 'pad', kind: 'smd', layer: 'topCopper', x: 78, y: 18, shape: 'rect', w: 1.6, h: 1.2 },
+        { id: uid(), type: 'text', layer: 'top', x: 14, y: 16, content: 'Lise Meitner', font: 'sans', size: 4 },
+        { id: uid(), type: 'text', layer: 'top', x: 14, y: 23, content: 'PCB Layout Artist', font: 'sans', size: 2.5 },
+        { id: uid(), type: 'text', layer: 'top', x: 14, y: 38, content: 'lise@meitner.io', font: 'mono', size: 2 },
+        { id: uid(), type: 'text', layer: 'top', x: 14, y: 43, content: 'meitner.design', font: 'mono', size: 2 },
+        { id: uid(), type: 'trace', layer: 'top', points: [{ x: 5, y: 49 }, { x: 60, y: 49 }, { x: 60, y: 5 }, { x: 80, y: 5 }], width: 0.3 },
+        { id: uid(), type: 'trace', layer: 'bottom', points: [{ x: 5, y: 5 }, { x: 30, y: 5 }, { x: 30, y: 49 }], width: 0.3 },
+        { id: uid(), type: 'pad', kind: 'smd', layer: 'top', x: 78, y: 14, shape: 'rect', w: 1.6, h: 1.2 },
+        { id: uid(), type: 'pad', kind: 'smd', layer: 'top', x: 78, y: 18, shape: 'rect', w: 1.6, h: 1.2 },
       ],
     },
   },
@@ -71,14 +85,15 @@ const GALLERY: GalleryEntry[] = [
     project: {
       version: 1, board: { width: 85, height: 54, corner: 3 }, boardColorKey: 'red',
       elements: [
-        { id: uid(), type: 'text', layer: 'topSilk', x: 14, y: 16, content: 'Nikola Tesla', font: 'sans', size: 4 },
-        { id: uid(), type: 'text', layer: 'topSilk', x: 14, y: 23, content: 'Power Electronics', font: 'sans', size: 2.5 },
-        { id: uid(), type: 'text', layer: 'topSilk', x: 14, y: 38, content: 'nikola@tesla.dev', font: 'sans', size: 2 },
-        { id: uid(), type: 'trace', layer: 'topCopper', points: [{ x: 5, y: 35 }, { x: 35, y: 35 }, { x: 35, y: 8 }, { x: 80, y: 8 }], width: 0.5 },
-        { id: uid(), type: 'trace', layer: 'topCopper', points: [{ x: 5, y: 46 }, { x: 70, y: 46 }], width: 0.5 },
-        { id: uid(), type: 'pad', kind: 'smd', layer: 'topCopper', x: 78, y: 14, shape: 'rect', w: 1.6, h: 1.2 },
-        { id: uid(), type: 'pad', kind: 'smd', layer: 'topCopper', x: 78, y: 18, shape: 'rect', w: 1.6, h: 1.2 },
-        { id: uid(), type: 'pad', kind: 'smd', layer: 'topCopper', x: 78, y: 22, shape: 'rect', w: 1.6, h: 1.2 },
+        { id: uid(), type: 'text', layer: 'top', x: 14, y: 16, content: 'Nikola Tesla', font: 'sans', size: 4 },
+        { id: uid(), type: 'text', layer: 'top', x: 14, y: 23, content: 'Power Electronics', font: 'sans', size: 2.5 },
+        { id: uid(), type: 'text', layer: 'top', x: 14, y: 38, content: 'nikola@tesla.dev', font: 'mono', size: 2 },
+        { id: uid(), type: 'text', layer: 'top', x: 14, y: 43, content: 'tesla-power.io', font: 'mono', size: 2 },
+        { id: uid(), type: 'trace', layer: 'top', points: [{ x: 5, y: 35 }, { x: 35, y: 35 }, { x: 35, y: 8 }, { x: 80, y: 8 }], width: 0.5 },
+        { id: uid(), type: 'trace', layer: 'top', points: [{ x: 5, y: 46 }, { x: 70, y: 46 }], width: 0.5 },
+        { id: uid(), type: 'pad', kind: 'smd', layer: 'top', x: 78, y: 14, shape: 'rect', w: 1.6, h: 1.2 },
+        { id: uid(), type: 'pad', kind: 'smd', layer: 'top', x: 78, y: 18, shape: 'rect', w: 1.6, h: 1.2 },
+        { id: uid(), type: 'pad', kind: 'smd', layer: 'top', x: 78, y: 22, shape: 'rect', w: 1.6, h: 1.2 },
       ],
     },
   },
@@ -87,15 +102,16 @@ const GALLERY: GalleryEntry[] = [
     project: {
       version: 1, board: { width: 85, height: 54, corner: 3 }, boardColorKey: 'purple',
       elements: [
-        { id: uid(), type: 'text', layer: 'topSilk', x: 14, y: 16, content: 'Grace Hopper', font: 'sans', size: 4 },
-        { id: uid(), type: 'text', layer: 'topSilk', x: 14, y: 23, content: 'Systems Programmer', font: 'sans', size: 2.5 },
-        { id: uid(), type: 'text', layer: 'topSilk', x: 14, y: 38, content: 'grace@hopper.io', font: 'sans', size: 2 },
-        { id: uid(), type: 'trace', layer: 'topCopper', points: [{ x: 5, y: 32 }, { x: 55, y: 32 }, { x: 55, y: 49 }], width: 0.3 },
-        { id: uid(), type: 'trace', layer: 'bottomCopper', points: [{ x: 5, y: 8 }, { x: 75, y: 8 }], width: 0.3 },
-        { id: uid(), type: 'pad', kind: 'smd', layer: 'topCopper', x: 78, y: 14, shape: 'rect', w: 1.6, h: 1.2 },
-        { id: uid(), type: 'pad', kind: 'smd', layer: 'topCopper', x: 78, y: 18, shape: 'rect', w: 1.6, h: 1.2 },
-        { id: uid(), type: 'pad', kind: 'smd', layer: 'topCopper', x: 78, y: 22, shape: 'rect', w: 1.6, h: 1.2 },
-        { id: uid(), type: 'pad', kind: 'smd', layer: 'topCopper', x: 78, y: 26, shape: 'rect', w: 1.6, h: 1.2 },
+        { id: uid(), type: 'text', layer: 'top', x: 14, y: 16, content: 'Grace Hopper', font: 'sans', size: 4 },
+        { id: uid(), type: 'text', layer: 'top', x: 14, y: 23, content: 'Systems Programmer', font: 'sans', size: 2.5 },
+        { id: uid(), type: 'text', layer: 'top', x: 14, y: 38, content: 'grace@hopper.io', font: 'mono', size: 2 },
+        { id: uid(), type: 'text', layer: 'top', x: 14, y: 43, content: 'hopper.systems', font: 'mono', size: 2 },
+        { id: uid(), type: 'trace', layer: 'top', points: [{ x: 5, y: 32 }, { x: 55, y: 32 }, { x: 55, y: 49 }], width: 0.3 },
+        { id: uid(), type: 'trace', layer: 'bottom', points: [{ x: 5, y: 8 }, { x: 75, y: 8 }], width: 0.3 },
+        { id: uid(), type: 'pad', kind: 'smd', layer: 'top', x: 78, y: 14, shape: 'rect', w: 1.6, h: 1.2 },
+        { id: uid(), type: 'pad', kind: 'smd', layer: 'top', x: 78, y: 18, shape: 'rect', w: 1.6, h: 1.2 },
+        { id: uid(), type: 'pad', kind: 'smd', layer: 'top', x: 78, y: 22, shape: 'rect', w: 1.6, h: 1.2 },
+        { id: uid(), type: 'pad', kind: 'smd', layer: 'top', x: 78, y: 26, shape: 'rect', w: 1.6, h: 1.2 },
       ],
     },
   },
@@ -104,13 +120,14 @@ const GALLERY: GalleryEntry[] = [
     project: {
       version: 1, board: { width: 85, height: 54, corner: 3 }, boardColorKey: 'yellow',
       elements: [
-        { id: uid(), type: 'text', layer: 'topSilk', x: 14, y: 16, content: 'Alan Turing', font: 'sans', size: 4 },
-        { id: uid(), type: 'text', layer: 'topSilk', x: 14, y: 23, content: 'Digital Logic', font: 'sans', size: 2.5 },
-        { id: uid(), type: 'text', layer: 'topSilk', x: 14, y: 38, content: 'alan@turing.dev', font: 'sans', size: 2 },
-        { id: uid(), type: 'trace', layer: 'topCopper', points: [{ x: 22, y: 5 }, { x: 22, y: 49 }], width: 0.3 },
-        { id: uid(), type: 'trace', layer: 'topCopper', points: [{ x: 22, y: 27 }, { x: 75, y: 27 }, { x: 75, y: 49 }], width: 0.3 },
-        { id: uid(), type: 'pad', kind: 'smd', layer: 'topCopper', x: 78, y: 14, shape: 'rect', w: 1.6, h: 1.2 },
-        { id: uid(), type: 'pad', kind: 'smd', layer: 'topCopper', x: 78, y: 18, shape: 'rect', w: 1.6, h: 1.2 },
+        { id: uid(), type: 'text', layer: 'top', x: 14, y: 16, content: 'Alan Turing', font: 'sans', size: 4 },
+        { id: uid(), type: 'text', layer: 'top', x: 14, y: 23, content: 'Digital Logic', font: 'sans', size: 2.5 },
+        { id: uid(), type: 'text', layer: 'top', x: 14, y: 38, content: 'alan@turing.dev', font: 'mono', size: 2 },
+        { id: uid(), type: 'text', layer: 'top', x: 14, y: 43, content: 'turing.computer', font: 'mono', size: 2 },
+        { id: uid(), type: 'trace', layer: 'top', points: [{ x: 22, y: 5 }, { x: 22, y: 49 }], width: 0.3 },
+        { id: uid(), type: 'trace', layer: 'top', points: [{ x: 22, y: 27 }, { x: 75, y: 27 }, { x: 75, y: 49 }], width: 0.3 },
+        { id: uid(), type: 'pad', kind: 'smd', layer: 'top', x: 78, y: 14, shape: 'rect', w: 1.6, h: 1.2 },
+        { id: uid(), type: 'pad', kind: 'smd', layer: 'top', x: 78, y: 18, shape: 'rect', w: 1.6, h: 1.2 },
       ],
     },
   },
@@ -119,13 +136,14 @@ const GALLERY: GalleryEntry[] = [
     project: {
       version: 1, board: { width: 85, height: 54, corner: 3 }, boardColorKey: 'white',
       elements: [
-        { id: uid(), type: 'text', layer: 'topSilk', x: 14, y: 16, content: 'Claude Shannon', font: 'sans', size: 4 },
-        { id: uid(), type: 'text', layer: 'topSilk', x: 14, y: 23, content: 'Signal Integrity', font: 'sans', size: 2.5 },
-        { id: uid(), type: 'text', layer: 'topSilk', x: 14, y: 38, content: 'claude@shannon.io', font: 'sans', size: 2 },
-        { id: uid(), type: 'trace', layer: 'topCopper', points: [{ x: 5, y: 20 }, { x: 40, y: 20 }, { x: 40, y: 46 }, { x: 80, y: 46 }], width: 0.3 },
-        { id: uid(), type: 'pad', kind: 'smd', layer: 'topCopper', x: 78, y: 14, shape: 'rect', w: 1.6, h: 1.2 },
-        { id: uid(), type: 'pad', kind: 'smd', layer: 'topCopper', x: 78, y: 18, shape: 'rect', w: 1.6, h: 1.2 },
-        { id: uid(), type: 'pad', kind: 'smd', layer: 'topCopper', x: 78, y: 22, shape: 'rect', w: 1.6, h: 1.2 },
+        { id: uid(), type: 'text', layer: 'top', x: 14, y: 16, content: 'Claude Shannon', font: 'sans', size: 4 },
+        { id: uid(), type: 'text', layer: 'top', x: 14, y: 23, content: 'Signal Integrity', font: 'sans', size: 2.5 },
+        { id: uid(), type: 'text', layer: 'top', x: 14, y: 38, content: 'claude@shannon.io', font: 'mono', size: 2 },
+        { id: uid(), type: 'text', layer: 'top', x: 14, y: 43, content: 'shannon.signals', font: 'mono', size: 2 },
+        { id: uid(), type: 'trace', layer: 'top', points: [{ x: 5, y: 20 }, { x: 40, y: 20 }, { x: 40, y: 46 }, { x: 80, y: 46 }], width: 0.3 },
+        { id: uid(), type: 'pad', kind: 'smd', layer: 'top', x: 78, y: 14, shape: 'rect', w: 1.6, h: 1.2 },
+        { id: uid(), type: 'pad', kind: 'smd', layer: 'top', x: 78, y: 18, shape: 'rect', w: 1.6, h: 1.2 },
+        { id: uid(), type: 'pad', kind: 'smd', layer: 'top', x: 78, y: 22, shape: 'rect', w: 1.6, h: 1.2 },
       ],
     },
   },
@@ -134,15 +152,16 @@ const GALLERY: GalleryEntry[] = [
     project: {
       version: 1, board: { width: 85, height: 54, corner: 3 }, boardColorKey: 'green',
       elements: [
-        { id: uid(), type: 'text', layer: 'topSilk', x: 14, y: 16, content: 'Hedy Lamarr', font: 'sans', size: 4 },
-        { id: uid(), type: 'text', layer: 'topSilk', x: 14, y: 23, content: 'Wireless Systems', font: 'sans', size: 2.5 },
-        { id: uid(), type: 'text', layer: 'topSilk', x: 14, y: 38, content: 'hedy@lamarr.dev', font: 'sans', size: 2 },
-        { id: uid(), type: 'trace', layer: 'topCopper', points: [{ x: 10, y: 10 }, { x: 75, y: 10 }, { x: 75, y: 46 }], width: 0.3 },
-        { id: uid(), type: 'trace', layer: 'bottomCopper', points: [{ x: 5, y: 46 }, { x: 50, y: 46 }, { x: 50, y: 10 }], width: 0.3 },
-        { id: uid(), type: 'pad', kind: 'smd', layer: 'topCopper', x: 78, y: 18, shape: 'rect', w: 1.6, h: 1.2 },
-        { id: uid(), type: 'pad', kind: 'smd', layer: 'topCopper', x: 78, y: 22, shape: 'rect', w: 1.6, h: 1.2 },
-        { id: uid(), type: 'pad', kind: 'smd', layer: 'topCopper', x: 78, y: 26, shape: 'rect', w: 1.6, h: 1.2 },
-        { id: uid(), type: 'pad', kind: 'smd', layer: 'topCopper', x: 78, y: 30, shape: 'rect', w: 1.6, h: 1.2 },
+        { id: uid(), type: 'text', layer: 'top', x: 14, y: 16, content: 'Hedy Lamarr', font: 'sans', size: 4 },
+        { id: uid(), type: 'text', layer: 'top', x: 14, y: 23, content: 'Wireless Systems', font: 'sans', size: 2.5 },
+        { id: uid(), type: 'text', layer: 'top', x: 14, y: 38, content: 'hedy@lamarr.dev', font: 'mono', size: 2 },
+        { id: uid(), type: 'text', layer: 'top', x: 14, y: 43, content: 'lamarr-wireless.io', font: 'mono', size: 2 },
+        { id: uid(), type: 'trace', layer: 'top', points: [{ x: 10, y: 10 }, { x: 75, y: 10 }, { x: 75, y: 46 }], width: 0.3 },
+        { id: uid(), type: 'trace', layer: 'bottom', points: [{ x: 5, y: 46 }, { x: 50, y: 46 }, { x: 50, y: 10 }], width: 0.3 },
+        { id: uid(), type: 'pad', kind: 'smd', layer: 'top', x: 78, y: 18, shape: 'rect', w: 1.6, h: 1.2 },
+        { id: uid(), type: 'pad', kind: 'smd', layer: 'top', x: 78, y: 22, shape: 'rect', w: 1.6, h: 1.2 },
+        { id: uid(), type: 'pad', kind: 'smd', layer: 'top', x: 78, y: 26, shape: 'rect', w: 1.6, h: 1.2 },
+        { id: uid(), type: 'pad', kind: 'smd', layer: 'top', x: 78, y: 30, shape: 'rect', w: 1.6, h: 1.2 },
       ],
     },
   },
@@ -151,14 +170,15 @@ const GALLERY: GalleryEntry[] = [
     project: {
       version: 1, board: { width: 85, height: 54, corner: 3 }, boardColorKey: 'black',
       elements: [
-        { id: uid(), type: 'text', layer: 'topSilk', x: 14, y: 16, content: 'John von Neumann', font: 'sans', size: 4 },
-        { id: uid(), type: 'text', layer: 'topSilk', x: 14, y: 23, content: 'Architecture', font: 'sans', size: 2.5 },
-        { id: uid(), type: 'text', layer: 'topSilk', x: 14, y: 38, content: 'john@vonneumann.io', font: 'sans', size: 2 },
-        { id: uid(), type: 'trace', layer: 'topCopper', points: [{ x: 5, y: 40 }, { x: 38, y: 40 }, { x: 38, y: 8 }, { x: 80, y: 8 }], width: 0.3 },
-        { id: uid(), type: 'trace', layer: 'bottomCopper', points: [{ x: 5, y: 8 }, { x: 20, y: 8 }, { x: 20, y: 46 }, { x: 60, y: 46 }], width: 0.3 },
-        { id: uid(), type: 'pad', kind: 'smd', layer: 'topCopper', x: 78, y: 14, shape: 'rect', w: 1.6, h: 1.2 },
-        { id: uid(), type: 'pad', kind: 'smd', layer: 'topCopper', x: 78, y: 18, shape: 'rect', w: 1.6, h: 1.2 },
-        { id: uid(), type: 'pad', kind: 'smd', layer: 'topCopper', x: 78, y: 22, shape: 'rect', w: 1.6, h: 1.2 },
+        { id: uid(), type: 'text', layer: 'top', x: 14, y: 16, content: 'John von Neumann', font: 'sans', size: 4 },
+        { id: uid(), type: 'text', layer: 'top', x: 14, y: 23, content: 'Architecture', font: 'sans', size: 2.5 },
+        { id: uid(), type: 'text', layer: 'top', x: 14, y: 38, content: 'john@vonneumann.io', font: 'mono', size: 2 },
+        { id: uid(), type: 'text', layer: 'top', x: 14, y: 43, content: 'vonneumann.arch', font: 'mono', size: 2 },
+        { id: uid(), type: 'trace', layer: 'top', points: [{ x: 5, y: 40 }, { x: 38, y: 40 }, { x: 38, y: 8 }, { x: 80, y: 8 }], width: 0.3 },
+        { id: uid(), type: 'trace', layer: 'bottom', points: [{ x: 5, y: 8 }, { x: 20, y: 8 }, { x: 20, y: 46 }, { x: 60, y: 46 }], width: 0.3 },
+        { id: uid(), type: 'pad', kind: 'smd', layer: 'top', x: 78, y: 14, shape: 'rect', w: 1.6, h: 1.2 },
+        { id: uid(), type: 'pad', kind: 'smd', layer: 'top', x: 78, y: 18, shape: 'rect', w: 1.6, h: 1.2 },
+        { id: uid(), type: 'pad', kind: 'smd', layer: 'top', x: 78, y: 22, shape: 'rect', w: 1.6, h: 1.2 },
       ],
     },
   },
@@ -287,7 +307,10 @@ export default function GalleryPage({ onBack, onEdit, onOpenProject }: Props) {
           <button
             key={i}
             className="gallery-item"
-            onClick={() => onOpenProject(entry.project)}
+            onClick={() => {
+              const saved = saveProject(`${entry.authorName} — ${entry.authorRole}`, entry.project)
+              onOpenProject(saved.project)
+            }}
             title={`${entry.authorName} — ${entry.authorRole}`}
           >
             <CardThumb entry={entry} />
