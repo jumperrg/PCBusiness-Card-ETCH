@@ -27,9 +27,18 @@ function normalizeLayersForThumb(project: PCBProject): PCBProject {
   }
 }
 
-function CardThumb({ entry }: { entry: ThumbEntry }) {
+function CardThumb({ entry, thumbnail }: { entry: ThumbEntry; thumbnail?: string }) {
   const { project, authorName } = entry
   const bc = BOARD_COLORS.find(c => c.key === project.boardColorKey)!
+
+  if (thumbnail) {
+    return (
+      <div className="gallery-card" style={{ background: bc.fill }}>
+        <img src={thumbnail} alt={authorName} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+      </div>
+    )
+  }
+
   const isLight = project.boardColorKey === 'white' || project.boardColorKey === 'yellow'
   const silkColor = isLight ? 'rgba(0,0,0,0.75)' : 'rgba(255,255,255,0.88)'
 
@@ -139,7 +148,7 @@ export default function ProjectsPage({ onBack, onEdit, onOpenProject }: Props) {
                 title={sp.name}
               >
                 <div style={{ position: 'relative' }}>
-                  <CardThumb entry={entry} />
+                  <CardThumb entry={entry} thumbnail={sp.thumbnail} />
                   <button
                     onClick={(e) => { e.stopPropagation(); deleteProject(sp.id); setSaved(listProjects()) }}
                     title="Delete project"

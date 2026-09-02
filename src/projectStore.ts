@@ -5,6 +5,7 @@ export interface SavedProject {
   name: string
   savedAt: number
   project: PCBProject
+  thumbnail?: string
 }
 
 const KEY = 'pcb-card-maker:projects'
@@ -88,10 +89,11 @@ export function listProjects(): SavedProject[] {
   }
 }
 
-export function saveProject(name: string, project: PCBProject, existingId?: string): SavedProject {
+export function saveProject(name: string, project: PCBProject, existingId?: string, thumbnail?: string): SavedProject {
   const all = listProjects()
   const id = existingId ?? `proj_${Date.now()}`
-  const entry: SavedProject = { id, name, savedAt: Date.now(), project }
+  const prevThumbnail = existingId ? all.find(p => p.id === existingId)?.thumbnail : undefined
+  const entry: SavedProject = { id, name, savedAt: Date.now(), project, thumbnail: thumbnail ?? prevThumbnail }
   const idx = all.findIndex(p => p.id === id)
   if (idx >= 0) all[idx] = entry
   else all.unshift(entry)

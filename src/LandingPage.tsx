@@ -5,6 +5,7 @@ interface Props {
   onStart: () => void
   onGallery: () => void
   onProjects: () => void
+  onGerberViewer: () => void
 }
 
 const CARD_REST = [
@@ -13,12 +14,12 @@ const CARD_REST = [
   'rotate(0deg)',
 ]
 const CARD_HOVER = [
-  'rotate(-5.5deg) translateY(24px) translateX(-26px)',
-  'rotate(3.5deg)  translateY(17px) translateX(22px)',
+  'rotate(-4deg) translateY(24px) translateX(-26px)',
+  'rotate(2.5deg)  translateY(17px) translateX(22px)',
   'rotate(0deg)    translateY(-4px)',
 ]
 
-export default function LandingPage({ onStart, onGallery, onProjects }: Props) {
+export default function LandingPage({ onStart, onGallery, onProjects, onGerberViewer }: Props) {
   const [hovered, setHovered] = useState(false)
 
   return (
@@ -30,6 +31,7 @@ export default function LandingPage({ onStart, onGallery, onProjects }: Props) {
           PCB Card Maker
         </span>
         <div style={{ display: 'flex', gap: 10 }}>
+          <button className="btn-ghost" onClick={onGerberViewer} style={{ padding: '8px 16px', fontSize: 13 }}>Gerber Viewer</button>
           <button className="btn-ghost" onClick={onProjects} style={{ padding: '8px 16px', fontSize: 13 }}>My Projects</button>
           <button className="btn-primary" onClick={onStart}>Start Editing</button>
         </div>
@@ -37,73 +39,81 @@ export default function LandingPage({ onStart, onGallery, onProjects }: Props) {
 
       {/* HERO */}
       <section className="hero">
+        {/* big background typography */}
+        <div className="hero-bg-type" aria-hidden="true">
+          <span>PCB</span>
+          <span>DESIGN</span>
+          <span>TRACES</span>
+          <span>COPPER</span>
+          <span>GERBER</span>
+          <span>VIAS</span>
+        </div>
         <div className="hero-grid-bg" />
-        <div className="hero-inner">
+
+        {/* two-column hero */}
+        <div className="hero-content">
           <div className="hero-text">
-            <div className="hero-label">PCB Business Cards</div>
-            <h1>Business cards that<br /><em>actually impress</em> engineers</h1>
+            <h1>Business cards <br /><em>for</em> engineers</h1>
             <p className="hero-sub">
-              Design real PCB-style business cards in your browser. Pick a board color,
-              lay out your traces, export — then get them fabricated at any PCB house.
+              Design real PCB-style business cards in your browser.
             </p>
             <div className="hero-actions">
               <button className="btn-primary btn-lg" onClick={onStart}>Start Editing →</button>
               <button className="btn-ghost btn-lg" onClick={onGallery}>Explore Gallery</button>
             </div>
           </div>
+
+          {/* PCB card stack on the right */}
           <div
             className="pcb-stack"
             onMouseEnter={() => setHovered(true)}
             onMouseLeave={() => setHovered(false)}
           >
-          {/* green card (back) */}
-          <div className="pcb-card pcb-green" style={{ transform: hovered ? CARD_HOVER[0] : CARD_REST[0] }}>
-            <svg className="pcb-traces" viewBox="0 0 340 200" preserveAspectRatio="none">
-              <line x1="30" y1="0" x2="30" y2="200" stroke="#0d9e52" strokeWidth="1" opacity="0.35" />
-              <line x1="0" y1="60" x2="340" y2="60" stroke="#0d9e52" strokeWidth="1" opacity="0.25" />
-              <circle cx="30" cy="60" r="4" fill="#03865a" opacity="0.5" />
-            </svg>
-          </div>
-          {/* blue card (mid) */}
-          <div className="pcb-card pcb-blue" style={{ transform: hovered ? CARD_HOVER[1] : CARD_REST[1] }}>
-            <svg className="pcb-traces" viewBox="0 0 340 200" preserveAspectRatio="none">
-              <line x1="60" y1="0" x2="60" y2="200" stroke="#1a5cd4" strokeWidth="1" opacity="0.4" />
-              <line x1="0" y1="100" x2="340" y2="100" stroke="#1a5cd4" strokeWidth="1" opacity="0.3" />
-              <circle cx="60" cy="100" r="5" fill="none" stroke="#015bbc" strokeWidth="1.5" opacity="0.6" />
-            </svg>
-          </div>
-          {/* black card (front) */}
-          <div className="pcb-card pcb-black" style={{ transform: hovered ? CARD_HOVER[2] : CARD_REST[2] }}>
-            <svg className="pcb-traces" viewBox="0 0 340 200" preserveAspectRatio="none">
-              <line x1="0" y1="40" x2="200" y2="40" stroke="#6b6e71" strokeWidth="1.2" opacity="0.5" />
-              <line x1="200" y1="40" x2="200" y2="160" stroke="#6b6e71" strokeWidth="1.2" opacity="0.5" />
-              <line x1="200" y1="160" x2="310" y2="160" stroke="#6b6e71" strokeWidth="1.2" opacity="0.5" />
-              <circle cx="200" cy="40" r="4" fill="none" stroke="#6b6e71" strokeWidth="1.5" opacity="0.7" />
-              <circle cx="200" cy="160" r="4" fill="none" stroke="#6b6e71" strokeWidth="1.5" opacity="0.7" />
-            </svg>
-            <div className="pcb-silk">
-              <div className="pcb-name">Alex Ivanova</div>
-              <div className="pcb-role">Embedded Systems Engineer</div>
+            <div className="pcb-card pcb-green" style={{ transform: hovered ? CARD_HOVER[0] : CARD_REST[0] }}>
+              <svg className="pcb-traces" viewBox="0 0 340 200" preserveAspectRatio="none">
+                <line x1="30" y1="0" x2="30" y2="200" stroke="#0d9e52" strokeWidth="1" opacity="0.35" />
+                <line x1="0" y1="60" x2="340" y2="60" stroke="#0d9e52" strokeWidth="1" opacity="0.25" />
+                <circle cx="30" cy="60" r="4" fill="#03865a" opacity="0.5" />
+              </svg>
             </div>
-            <div className="pcb-contacts pcb-silk">
-              <span>alex@example.io</span>
-              <span>github.com/alex</span>
+            <div className="pcb-card pcb-blue" style={{ transform: hovered ? CARD_HOVER[1] : CARD_REST[1] }}>
+              <svg className="pcb-traces" viewBox="0 0 340 200" preserveAspectRatio="none">
+                <line x1="60" y1="0" x2="60" y2="200" stroke="#1a5cd4" strokeWidth="1" opacity="0.4" />
+                <line x1="0" y1="100" x2="340" y2="100" stroke="#1a5cd4" strokeWidth="1" opacity="0.3" />
+                <circle cx="60" cy="100" r="5" fill="none" stroke="#015bbc" strokeWidth="1.5" opacity="0.6" />
+              </svg>
             </div>
-            <div className="pcb-pads">
-              <div className="pad" /><div className="pad" />
-              <div className="pad" /><div className="pad" />
+            <div className="pcb-card pcb-black" style={{ transform: hovered ? CARD_HOVER[2] : CARD_REST[2] }}>
+              <svg className="pcb-traces" viewBox="0 0 340 200" preserveAspectRatio="none">
+                <line x1="0" y1="40" x2="200" y2="40" stroke="#6b6e71" strokeWidth="1.2" opacity="0.5" />
+                <line x1="200" y1="40" x2="200" y2="160" stroke="#6b6e71" strokeWidth="1.2" opacity="0.5" />
+                <line x1="200" y1="160" x2="310" y2="160" stroke="#6b6e71" strokeWidth="1.2" opacity="0.5" />
+                <circle cx="200" cy="40" r="4" fill="none" stroke="#6b6e71" strokeWidth="1.5" opacity="0.7" />
+                <circle cx="200" cy="160" r="4" fill="none" stroke="#6b6e71" strokeWidth="1.5" opacity="0.7" />
+              </svg>
+              <div className="pcb-silk">
+                <div className="pcb-name">Alex Ivanova</div>
+                <div className="pcb-role">Embedded Systems Engineer</div>
+              </div>
+              <div className="pcb-contacts pcb-silk">
+                <span>alex@example.io</span>
+                <span>github.com/alex</span>
+              </div>
+              <div className="pcb-pads">
+                <div className="pad" /><div className="pad" />
+                <div className="pad" /><div className="pad" />
+              </div>
+              <span className="corner-mark tl">REV 1.0</span>
+              <span className="corner-mark br">JLCPCB</span>
             </div>
-            <span className="corner-mark tl">REV 1.0</span>
-            <span className="corner-mark br">JLCPCB</span>
           </div>
-          </div>{/* end pcb-stack */}
-        </div>{/* end hero-inner */}
+        </div>
       </section>
 
       <hr className="ldivider" />
 
       {/* FEATURES */}
-      <section className="lsection">
+      {/* <section className="lsection">
         <div className="section-label">Features</div>
         <h2>Everything you need, nothing you don't</h2>
         <p className="section-sub">A focused tool built for one thing: PCB business cards. No bloat, no subscriptions.</p>
@@ -119,7 +129,7 @@ export default function LandingPage({ onStart, onGallery, onProjects }: Props) {
             </div>
           ))}
         </div>
-      </section>
+      </section> */}
 
       <hr className="ldivider" />
 

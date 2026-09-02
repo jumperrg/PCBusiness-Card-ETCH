@@ -1,6 +1,11 @@
 ﻿import React, { useState, useRef, useCallback, useEffect } from "react";
 import { UI, BOARD_COLORS } from "./colors";
 import { listProjects, saveProject, deleteProject, seedProjectsOnce, type SavedProject } from "./projectStore";
+import { svgToThumbnail } from "./thumbnail";
+import JSZip from "jszip";
+import { exportGerber } from "./gerberExport";
+import { parseGerber, guessColor } from "./GerberViewer";
+import { openGerberPreview } from "./App";
 import {
   MousePointer2,
   Spline,
@@ -13,7 +18,6 @@ import {
   Download,
   Trash2,
   FolderOpen,
-  Save,
   X,
   BookOpen,
   ChevronDown,
@@ -66,6 +70,7 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
   const [board, setBoard] = useState({ width: 85, height: 54, corner: 3 });
   const [elements, setElements] = useState<any[]>([]);
   const [tool, setTool] = useState("select");
+  const [hoveredTool, setHoveredTool] = useState<string | null>(null);
   const [activeLayer, setActiveLayer] = useState("top");
   const [layersOpen, setLayersOpen] = useState(true);
   const [specOpen, setSpecOpen] = useState(true);
@@ -105,13 +110,32 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
 
   const currentProject = (): PCBProject => ({ version: 1, board, boardColorKey, elements });
 
-  const handleSave = () => {
-    const saved = saveProject(projectName, currentProject(), projectId);
+  const handleSave = async () => {
+    let thumbnail: string | undefined;
+    try {
+      if (svgRef.current) thumbnail = await svgToThumbnail(svgRef.current);
+    } catch {
+      // fall back to keeping the previous thumbnail (or none) if rasterization fails
+    }
+    const saved = saveProject(projectName, currentProject(), projectId, thumbnail);
     setProjectId(saved.id);
     refreshProjects();
   };
 
+  // ---- autosave: debounce 0.5s after any change to name, board, color, or elements ----
+  const skipNextAutosave = useRef(true);
+  useEffect(() => {
+    if (skipNextAutosave.current) {
+      skipNextAutosave.current = false;
+      return;
+    }
+    const timer = setTimeout(() => { handleSave(); }, 500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectName, board, boardColorKey, elements]);
+
   const applyProject = (p: PCBProject) => {
+    skipNextAutosave.current = true;
     if (p.board) setBoard(p.board);
     if (p.boardColorKey) setBoardColorKey(p.boardColorKey);
     if (Array.isArray(p.elements)) {
@@ -141,6 +165,7 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
   };
 
   const handleNewProject = () => {
+    skipNextAutosave.current = true;
     setBoard({ width: 85, height: 54, corner: 3 });
     setBoardColorKey("green");
     setElements([]);
@@ -158,7 +183,7 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
   };
   const boardColor = BOARD_COLORS.find((c) => c.key === boardColorKey)!;
   const boardBorder = { stroke: "#ffffff60", strokeWidth: 2, vectorEffect: "non-scaling-stroke" } as const;
-  const svgRef = useRef(null);
+  const svgRef = useRef<SVGSVGElement>(null);
   const svgBackRef = useRef(null);
   const canvasWrapRef = useRef(null);
 
@@ -455,6 +480,32 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
     if (e.key === "Enter" && drawingPoints.length) finishDrawing();
   };
 
+  const exportGerberZip = async () => {
+    const project = currentProject();
+    const name = projectName.replace(/\s+/g, "_");
+    const blob = await exportGerber(project, projectName);
+
+    // Download zip
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${name}_gerbers.zip`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    // Also unzip and open directly in the Gerber Viewer
+    const zip = await JSZip.loadAsync(blob);
+    const layers: import("./GerberViewer").LoadedLayer[] = [];
+    for (const [filename, zipEntry] of Object.entries(zip.files)) {
+      if (zipEntry.dir) continue;
+      const text = await zipEntry.async("string");
+      const color = guessColor(filename);
+      const parsed = parseGerber(text, filename, color);
+      layers.push({ id: `${filename}-${Date.now()}`, parsed, visible: true, strokeWidth: 0.1 });
+    }
+    openGerberPreview(layers);
+  };
+
   const exportProject = () => {
     const data = JSON.stringify({ version: 1, board, boardColorKey, elements }, null, 2);
     const blob = new Blob([data], { type: "application/json" });
@@ -532,19 +583,11 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowProjects(p => !p)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded font-mono text-[15px] tracking-wide"
-            style={{ background: showProjects ? UI.bgChipOn : 'transparent', color: UI.textMuted, border: `1px solid ${showProjects ? UI.border : 'transparent'}` }}
+            className="flex items-center gap-1.5 px-2 py-1.5 font-mono text-[15px] tracking-wide hover:underline"
+            style={{ background: 'transparent', color: showProjects ? UI.textPrimary : UI.textMuted, border: 'none' }}
           >
             <BookOpen size={13} strokeWidth={2.5} />
             PROJECTS
-          </button>
-          <button
-            onClick={handleSave}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded font-mono text-[15px] tracking-wide"
-            style={{ background: UI.bgChipOn, color: UI.textMuted, border: `1px solid ${UI.borderSub}` }}
-          >
-            <Save size={13} strokeWidth={2.5} />
-            SAVE
           </button>
           <button
             onClick={exportProject}
@@ -566,6 +609,7 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
             />
           </label>
           <button
+            onClick={exportGerberZip}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded font-mono text-[15px] tracking-wide"
             style={{ background: UI.accent, color: UI.accentText }}
           >
@@ -591,14 +635,6 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
               + NEW
             </button>
           </div>
-          <button
-            onClick={handleSave}
-            className="flex items-center justify-center gap-2 mx-4 my-3 py-2 rounded font-mono text-[13px] tracking-wide w-[calc(100%-32px)]"
-            style={{ background: UI.bgChipOn, color: UI.textMuted, border: `1px solid ${UI.borderSub}` }}
-          >
-            <Save size={13} strokeWidth={2.5} />
-            SAVE CURRENT PROJECT
-          </button>
           {projects.length === 0 && (
             <div className="px-4 pb-6 text-center font-mono text-[13px]" style={{ color: UI.textFaint }}>
               No saved projects yet.
@@ -722,9 +758,11 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
                     setTool("select");
                   }
                 }}
-                className="w-9 h-9 flex items-center justify-center rounded-md transition"
+                onMouseEnter={() => setHoveredTool(t.key)}
+                onMouseLeave={() => setHoveredTool(null)}
+                className="w-9 h-9 flex items-center justify-center rounded-md"
                 style={{
-                  background: active ? UI.accent : "transparent",
+                  background: active ? UI.accent : hoveredTool === t.key ? UI.bgChipOn : "transparent",
                   color: active ? UI.accentText : UI.textMuted,
                 }}
               >
