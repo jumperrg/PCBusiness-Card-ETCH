@@ -3,9 +3,9 @@ import { Trash2 } from 'lucide-react'
 import { BOARD_COLORS } from './colors'
 import { type PCBProject } from './pcb-card-editor'
 import { listProjects, deleteProject, type SavedProject } from './projectStore'
+import Header from './Header'
 
 interface Props {
-  onBack: () => void
   onEdit: () => void
   onOpenProject: (project: PCBProject) => void
 }
@@ -76,17 +76,11 @@ function CardThumb({ entry, thumbnail }: { entry: ThumbEntry; thumbnail?: string
             fill="none" stroke={bc.copper} strokeWidth={e.width * S * 1.5}
             strokeLinecap="round" strokeLinejoin="round" />
         ))}
-        {traces.flatMap((e: any) =>
-          e.points.slice(1, -1).map((p: any, i: number) => (
-            <g key={`via-${e.id}-${i}`}>
-              <circle cx={p.x * S} cy={p.y * S} r="4" fill="#18191b" />
-              <circle cx={p.x * S} cy={p.y * S} r="4" fill="none" stroke={bc.copper} strokeWidth="1.5" />
-            </g>
-          ))
-        )}
         {pads.map((e: any, i: number) => (
-          <rect key={i} x={e.x * S - e.w * S / 2} y={e.y * S - e.h * S / 2}
-            width={e.w * S} height={e.h * S} rx="1" fill={bc.copper} opacity="0.85" />
+          e.kind === 'tht'
+            ? <circle key={i} cx={e.x * S} cy={e.y * S} r={e.size * S / 2} fill={bc.copper} opacity="0.85" />
+            : <rect key={i} x={e.x * S - e.w * S / 2} y={e.y * S - e.h * S / 2}
+                width={e.w * S} height={e.h * S} rx="1" fill={bc.copper} opacity="0.85" />
         ))}
         {texts.slice(0, 2).map((e: any, i: number) => (
           <text key={i} x={e.x * S} y={e.y * S} fontSize={e.size * S * 0.8}
@@ -101,7 +95,7 @@ function CardThumb({ entry, thumbnail }: { entry: ThumbEntry; thumbnail?: string
   )
 }
 
-export default function ProjectsPage({ onBack, onEdit, onOpenProject }: Props) {
+export default function ProjectsPage({ onEdit, onOpenProject }: Props) {
   const [saved, setSaved] = useState<SavedProject[]>([])
 
   useEffect(() => {
@@ -110,16 +104,7 @@ export default function ProjectsPage({ onBack, onEdit, onOpenProject }: Props) {
 
   return (
     <div className="landing gallery-page">
-      <nav className="lnav">
-        <button className="lnav-logo" onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-          <span className="lnav-dot" />
-          PCB Card Maker
-        </button>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button className="btn-ghost" onClick={onBack} style={{ padding: '8px 16px', fontSize: 13 }}>← Back</button>
-          <button className="btn-primary" onClick={onEdit}>Start Editing</button>
-        </div>
-      </nav>
+      <Header active="projects" />
 
       <div className="gallery-header">
         <div className="section-label">Your Projects</div>
@@ -144,7 +129,7 @@ export default function ProjectsPage({ onBack, onEdit, onOpenProject }: Props) {
               <button
                 key={sp.id}
                 className="gallery-item"
-                onClick={() => onOpenProject(sp.project)}
+                onClick={() => onOpenProject({ ...sp.project, id: sp.id, name: sp.name })}
                 title={sp.name}
               >
                 <div style={{ position: 'relative' }}>

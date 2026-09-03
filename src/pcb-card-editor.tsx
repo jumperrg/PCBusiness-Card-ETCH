@@ -1,11 +1,12 @@
 ﻿import React, { useState, useRef, useCallback, useEffect } from "react";
 import { UI, BOARD_COLORS } from "./colors";
-import { listProjects, saveProject, deleteProject, seedProjectsOnce, type SavedProject } from "./projectStore";
+import { saveProject } from "./projectStore";
 import { svgToThumbnail } from "./thumbnail";
 import JSZip from "jszip";
 import { exportGerber } from "./gerberExport";
 import { parseGerber, guessColor } from "./GerberViewer";
-import { openGerberPreview } from "./App";
+import { openGerberPreview, navigate } from "./App";
+import Header from "./Header";
 import {
   MousePointer2,
   Spline,
@@ -18,8 +19,6 @@ import {
   Download,
   Trash2,
   FolderOpen,
-  X,
-  BookOpen,
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
@@ -64,6 +63,8 @@ export interface PCBProject {
   boardColorKey: string
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   elements: any[]
+  id?: string
+  name?: string
 }
 
 export default function PCBCardEditor({ initialProject }: { initialProject?: PCBProject }) {
@@ -99,14 +100,10 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
   // ---- project system ----
   const [projectId, setProjectId] = useState<string | undefined>(undefined);
   const [projectName, setProjectName] = useState("Untitled");
-  const [showProjects, setShowProjects] = useState(false);
-  const [projects, setProjects] = useState<SavedProject[]>(() => { seedProjectsOnce(); return listProjects(); });
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState("Untitled");
 
   useEffect(() => { if (initialProject) applyProject(initialProject); }, []);
-
-  const refreshProjects = () => setProjects(listProjects());
 
   const currentProject = (): PCBProject => ({ version: 1, board, boardColorKey, elements });
 
@@ -119,10 +116,11 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
     }
     const saved = saveProject(projectName, currentProject(), projectId, thumbnail);
     setProjectId(saved.id);
-    refreshProjects();
   };
 
   // ---- autosave: debounce 0.5s after any change to name, board, color, or elements ----
+  // A brand-new (unsaved) project only starts autosaving once the user actually
+  // edits something — otherwise every visit to the editor creates a blank "Untitled" entry.
   const skipNextAutosave = useRef(true);
   useEffect(() => {
     if (skipNextAutosave.current) {
@@ -147,21 +145,9 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
       setElements(normalized)
       setSelectedId(null)
     }
-  };
-
-  const handleOpenProject = (entry: SavedProject) => {
-    applyProject(entry.project);
-    setProjectId(entry.id);
-    setProjectName(entry.name);
-    setNameInput(entry.name);
-    setShowProjects(false);
-  };
-
-  const handleDeleteProject = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    deleteProject(id);
-    refreshProjects();
-    if (id === projectId) { setProjectId(undefined); setProjectName("Untitled"); }
+    setProjectId(p.id);
+    setProjectName(p.name ?? "Untitled");
+    setNameInput(p.name ?? "Untitled");
   };
 
   const handleNewProject = () => {
@@ -173,7 +159,6 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
     setProjectId(undefined);
     setProjectName("Untitled");
     setNameInput("Untitled");
-    setShowProjects(false);
   };
 
   const commitName = () => {
@@ -551,120 +536,70 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
       onKeyDown={onKeyDown}
     >
       {/* Header */}
-      <div
-        className="flex items-center justify-between px-4 py-2 border-b shrink-0"
-        style={{ borderColor: UI.border, background: UI.bgPanel }}
-      >
-        <div className="flex items-center gap-3">
-          <div className="w-2.5 h-2.5 rounded-full" style={{ background: UI.accent }} />
-          <span className="font-mono tracking-widest text-[15px] cursor-pointer" style={{ color: UI.textMuted }} onClick={() => window.location.href = '/'}>ETCH</span>
-          <span style={{ color: UI.textFaint, fontSize: 14 }}>/</span>
-          {editingName ? (
-            <input
-              autoFocus
-              value={nameInput}
-              onChange={e => setNameInput(e.target.value)}
-              onBlur={commitName}
-              onKeyDown={e => { if (e.key === 'Enter') commitName(); if (e.key === 'Escape') setEditingName(false); }}
-              className="font-mono text-[14px] bg-transparent border-b outline-none px-1"
-              style={{ color: UI.textPrimary, borderColor: UI.accent, width: Math.max(120, nameInput.length * 8) }}
-            />
-          ) : (
-            <button
-              onClick={() => { setNameInput(projectName); setEditingName(true); }}
-              className="font-mono text-[14px] hover:underline"
-              style={{ color: UI.textFaint, background: 'none', border: 'none', cursor: 'text' }}
-            >
-              {projectName}
-            </button>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowProjects(p => !p)}
-            className="flex items-center gap-1.5 px-2 py-1.5 font-mono text-[15px] tracking-wide hover:underline"
-            style={{ background: 'transparent', color: showProjects ? UI.textPrimary : UI.textMuted, border: 'none' }}
-          >
-            <BookOpen size={13} strokeWidth={2.5} />
-            PROJECTS
-          </button>
-          <button
-            onClick={exportProject}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded font-mono text-[15px] tracking-wide"
-            style={{ background: UI.bgChipOn, color: UI.textMuted, border: `1px solid ${UI.borderSub}` }}
-          >
-            <Download size={13} strokeWidth={2.5} />
-            EXPORT JSON
-          </button>
-          <label
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded font-mono text-[15px] tracking-wide cursor-pointer"
-            style={{ background: UI.bgChipOn, color: UI.textMuted, border: `1px solid ${UI.borderSub}` }}
-          >
-            <FolderOpen size={13} strokeWidth={2.5} />
-            IMPORT JSON
-            <input
-              type="file" accept=".json" className="hidden"
-              onChange={(e) => { if (e.target.files?.[0]) { importProject(e.target.files[0]); e.target.value = ""; } }}
-            />
-          </label>
-          <button
-            onClick={exportGerberZip}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded font-mono text-[15px] tracking-wide"
-            style={{ background: UI.accent, color: UI.accentText }}
-          >
-            <Download size={13} strokeWidth={2.5} />
-            EXPORT GERBER
-          </button>
-        </div>
-      </div>
-
-      {/* Projects panel */}
-      {showProjects && (
-        <div
-          className="absolute top-[45px] right-0 z-50 flex flex-col"
-          style={{ width: 320, background: UI.bgPanel, borderLeft: `1px solid ${UI.border}`, borderBottom: `1px solid ${UI.border}`, maxHeight: 'calc(100vh - 45px)', overflowY: 'auto' }}
-        >
-          <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: UI.border }}>
-            <span className="font-mono text-[12px] tracking-widest" style={{ color: UI.textFaint }}>PROJECTS</span>
-            <button
-              onClick={handleNewProject}
-              className="font-mono text-[12px] px-2 py-1 rounded"
-              style={{ background: UI.accent, color: '#fff', border: 'none' }}
-            >
-              + NEW
-            </button>
-          </div>
-          {projects.length === 0 && (
-            <div className="px-4 pb-6 text-center font-mono text-[13px]" style={{ color: UI.textFaint }}>
-              No saved projects yet.
-            </div>
-          )}
-          {projects.map(p => (
-            <button
-              key={p.id}
-              onClick={() => handleOpenProject(p)}
-              className="flex items-center justify-between px-4 py-3 border-b text-left w-full group"
-              style={{ borderColor: UI.borderSub, background: p.id === projectId ? UI.bgChipOn : 'transparent', border: 'none', borderBottom: `1px solid ${UI.borderSub}` }}
-            >
-              <div>
-                <div className="font-mono text-[13px]" style={{ color: p.id === projectId ? UI.textPrimary : UI.textMuted }}>{p.name}</div>
-                <div className="font-mono text-[11px] mt-0.5" style={{ color: UI.textFaint }}>
-                  {p.project.boardColorKey} · {new Date(p.savedAt).toLocaleDateString()}
-                </div>
-              </div>
+      <Header
+        right={null}
+        left={
+          <>
+            <div className="w-2.5 h-2.5 rounded-full" style={{ background: UI.accent }} />
+            <span className="font-mono tracking-widest text-[15px] cursor-pointer" style={{ color: UI.textMuted }} onClick={() => navigate('/')}>ETCH</span>
+            <span style={{ color: UI.textFaint, fontSize: 14 }}>/</span>
+            {editingName ? (
+              <input
+                autoFocus
+                value={nameInput}
+                onChange={e => setNameInput(e.target.value)}
+                onBlur={commitName}
+                onKeyDown={e => { if (e.key === 'Enter') commitName(); if (e.key === 'Escape') setEditingName(false); }}
+                className="font-mono text-[14px] bg-transparent border-b outline-none px-1"
+                style={{ color: UI.textPrimary, borderColor: UI.accent, width: Math.max(120, nameInput.length * 8) }}
+              />
+            ) : (
               <button
-                onClick={(e) => handleDeleteProject(p.id, e)}
-                className="opacity-0 group-hover:opacity-100 p-1 rounded"
-                style={{ color: UI.danger, background: 'none', border: 'none', transition: 'opacity 0.15s' }}
+                onClick={() => { setNameInput(projectName); setEditingName(true); }}
+                className="font-mono text-[14px] hover:underline"
+                style={{ color: UI.textFaint, background: 'none', border: 'none', cursor: 'text' }}
               >
-                <X size={13} />
+                {projectName}
               </button>
-            </button>
-          ))}
-        </div>
-      )}
-
+            )}
+          </>
+        }
+      >
+        <button
+          onClick={handleNewProject}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded font-mono text-[15px] tracking-wide"
+          style={{ background: UI.bgChipOn, color: UI.textMuted, border: `1px solid ${UI.borderSub}` }}
+        >
+          + NEW
+        </button>
+        <button
+          onClick={exportProject}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded font-mono text-[15px] tracking-wide"
+          style={{ background: UI.bgChipOn, color: UI.textMuted, border: `1px solid ${UI.borderSub}` }}
+        >
+          <Download size={13} strokeWidth={2.5} />
+          EXPORT JSON
+        </button>
+        <label
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded font-mono text-[15px] tracking-wide cursor-pointer"
+          style={{ background: UI.bgChipOn, color: UI.textMuted, border: `1px solid ${UI.borderSub}` }}
+        >
+          <FolderOpen size={13} strokeWidth={2.5} />
+          IMPORT JSON
+          <input
+            type="file" accept=".json" className="hidden"
+            onChange={(e) => { if (e.target.files?.[0]) { importProject(e.target.files[0]); e.target.value = ""; } }}
+          />
+        </label>
+        <button
+          onClick={exportGerberZip}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded font-mono text-[15px] tracking-wide"
+          style={{ background: UI.accent, color: UI.accentText }}
+        >
+          <Download size={13} strokeWidth={2.5} />
+          EXPORT GERBER
+        </button>
+      </Header>
 
       {/* Second bar: layers, PCB color, grid */}
       <div
@@ -837,7 +772,7 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
                   <rect x={0} y={0} width={board.width} height={board.height} rx={board.corner} ry={board.corner} />
                 </clipPath>
               </defs>
-              <g transform={`translate(${marginMM}, ${marginMM})`}>
+              <g data-board-group="true" transform={`translate(${marginMM}, ${marginMM})`}>
                 {/* board substrate */}
                 {layerVis.outline && (
                   <rect x={0} y={0} width={board.width} height={board.height} rx={board.corner} ry={board.corner}

@@ -79,16 +79,11 @@ export default function App() {
   }
 
   if (path === '/gallery') return (
-    <GalleryPage
-      onBack={() => navigate('/')}
-      onEdit={() => navigate('/editor')}
-      onOpenProject={openInEditor}
-    />
+    <GalleryPage onOpenProject={openInEditor} />
   )
 
   if (path === '/projects') return (
     <ProjectsPage
-      onBack={() => navigate('/')}
       onEdit={() => navigate('/editor')}
       onOpenProject={openInEditor}
     />

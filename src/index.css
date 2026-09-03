@@ -78,18 +78,21 @@ body:has(.landing) #root {
 }
 
 .landing {
-  --lbg:         #2c2b28;
-  --lbg-panel:   #363530;
-  --lbg-card:    #312f2c;
-  --lborder:     #4a4844;
-  --ltext:       #e8e2d8;
-  --ltext-muted: #a09890;
-  --ltext-faint: #706860;
-  --laccent:     #e8623a;
-  --laccent-dk:  #c44828;
+  --lbg:         #1a1f2e;
+  --lbg-panel:   #212842;
+  --lbg-card:    #1e2440;
+  --lborder:     #3a4166;
+  --ltext:       #f2f0ff;
+  --ltext-muted: #b3b8d9;
+  --ltext-faint: #7a80a8;
+  --laccent:     #ff8a4c;
+  --laccent-dk:  #ff6b1a;
+  --laccent-2:   #4cc9f0;
   --lmono:       ui-monospace, Consolas, monospace;
 
   background: var(--lbg);
+  background-image: radial-gradient(ellipse 90% 60% at 50% -10%, rgba(76,201,240,0.14) 0%, transparent 60%),
+    radial-gradient(ellipse 70% 50% at 90% 20%, rgba(255,138,76,0.10) 0%, transparent 60%);
   color: var(--ltext-muted);
   font-family: var(--sans);
   font-size: 17px;
@@ -114,10 +117,18 @@ body:has(.landing) #root {
   position: fixed; top: 0; left: 0; right: 0; z-index: 100;
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 40px; height: 56px;
-  background: rgba(44,43,40,0.92);
+  background: rgba(26,31,46,0.92);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--lborder);
 }
+.site-header {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 20px 40px;
+  background: none;
+  pointer-events: none;
+}
+.site-header > * { pointer-events: auto; }
 .lnav-logo {
   font-family: var(--lmono);
   font-size: 14px;
@@ -191,7 +202,7 @@ body:has(.landing) #root {
   font-weight: 900;
   letter-spacing: -0.02em;
   color: transparent;
-  -webkit-text-stroke: 1.5px rgba(232,98,58,0.12);
+  -webkit-text-stroke: 1.5px rgba(255,138,76,0.16);
   line-height: 0.88;
   white-space: nowrap;
   user-select: none;
@@ -206,8 +217,8 @@ body:has(.landing) #root {
 .hero-grid-bg {
   position: absolute; inset: 0; pointer-events: none;
   background-image:
-    linear-gradient(rgba(232,98,58,0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(232,98,58,0.05) 1px, transparent 1px);
+    linear-gradient(rgba(76,201,240,0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(76,201,240,0.08) 1px, transparent 1px);
   background-size: 32px 32px;
   mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, black 30%, transparent 100%);
 }
@@ -268,9 +279,9 @@ body:has(.landing) #root {
   overflow: hidden;
   transition: transform 0.75s cubic-bezier(0.34, 1.4, 0.64, 1), box-shadow 0.75s ease;
 }
-.pcb-green { background: #066434; box-shadow: 0 0 18px 2px #0d9e5288, 0 0 48px 6px #0d9e5233; }
-.pcb-blue  { background: #073cac; box-shadow: 0 0 18px 2px #1a5cd488, 0 0 48px 6px #1a5cd433; }
-.pcb-black { background: #18191c; box-shadow: 0 0 18px 2px #6b6e7166, 0 0 48px 6px #6b6e7122; z-index: 3; }
+.pcb-green { background: #0a7a40; box-shadow: 0 0 22px 3px #16c26a99, 0 0 56px 10px #16c26a3d; }
+.pcb-blue  { background: #0a4bd6; box-shadow: 0 0 22px 3px #4c9dff99, 0 0 56px 10px #4c9dff3d; }
+.pcb-black { background: #1c1e26; box-shadow: 0 0 22px 3px #ff8a4c88, 0 0 56px 10px #ff8a4c33; z-index: 3; }
 
 .pcb-traces {
   position: absolute; inset: 0; width: 100%; height: 100%;
@@ -332,8 +343,8 @@ body:has(.landing) #root {
 .feature:hover { background: var(--lbg-panel); }
 .feature-icon {
   width: 40px; height: 40px; border-radius: 8px;
-  background: rgba(232,98,58,0.12);
-  border: 1px solid rgba(232,98,58,0.25);
+  background: rgba(255,138,76,0.14);
+  border: 1px solid rgba(255,138,76,0.3);
   display: flex; align-items: center; justify-content: center;
   margin-bottom: 20px; color: var(--laccent);
 }
@@ -406,7 +417,7 @@ body:has(.landing) #root {
 }
 .cta-glow {
   position: absolute; inset: 0; pointer-events: none;
-  background: radial-gradient(ellipse 60% 50% at 50% 50%, rgba(232,98,58,0.07) 0%, transparent 70%);
+  background: radial-gradient(ellipse 60% 50% at 50% 50%, rgba(255,138,76,0.12) 0%, transparent 70%);
 }
 .cta-section h2 { max-width: 600px; margin: 0 auto 16px; position: relative; }
 .cta-section .section-sub { max-width: 440px; margin: 0 auto 40px; position: relative; }

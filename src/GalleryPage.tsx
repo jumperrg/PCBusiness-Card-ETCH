@@ -1,10 +1,8 @@
 import { BOARD_COLORS, type BoardColorKey } from './colors'
 import { type PCBProject } from './pcb-card-editor'
-import { saveProject } from './projectStore'
+import Header from './Header'
 
 interface Props {
-  onBack: () => void
-  onEdit: () => void
   onOpenProject: (project: PCBProject) => void
 }
 
@@ -282,19 +280,10 @@ function CardThumb({ entry }: { entry: GalleryEntry }) {
   )
 }
 
-export default function GalleryPage({ onBack, onEdit, onOpenProject }: Props) {
+export default function GalleryPage({ onOpenProject }: Props) {
   return (
     <div className="landing gallery-page">
-      <nav className="lnav">
-        <button className="lnav-logo" onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-          <span className="lnav-dot" />
-          PCB Card Maker
-        </button>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button className="btn-ghost" onClick={onBack} style={{ padding: '8px 16px', fontSize: 13 }}>← Back</button>
-          <button className="btn-primary" onClick={onEdit}>Start Editing</button>
-        </div>
-      </nav>
+      <Header active="gallery" />
 
       <div className="gallery-header">
         <div className="section-label">Community Gallery</div>
@@ -308,8 +297,7 @@ export default function GalleryPage({ onBack, onEdit, onOpenProject }: Props) {
             key={i}
             className="gallery-item"
             onClick={() => {
-              const saved = saveProject(`${entry.authorName} — ${entry.authorRole}`, entry.project)
-              onOpenProject(saved.project)
+              onOpenProject({ ...entry.project, name: `${entry.authorName} — ${entry.authorRole}` })
             }}
             title={`${entry.authorName} — ${entry.authorRole}`}
           >

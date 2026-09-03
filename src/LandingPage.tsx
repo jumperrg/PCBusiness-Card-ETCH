@@ -1,11 +1,10 @@
 import { useState } from 'react'
 import { BOARD_COLORS } from './colors'
+import Header from './Header'
 
 interface Props {
   onStart: () => void
   onGallery: () => void
-  onProjects: () => void
-  onGerberViewer: () => void
 }
 
 const CARD_REST = [
@@ -19,23 +18,13 @@ const CARD_HOVER = [
   'rotate(0deg)    translateY(-4px)',
 ]
 
-export default function LandingPage({ onStart, onGallery, onProjects, onGerberViewer }: Props) {
+export default function LandingPage({ onStart, onGallery }: Props) {
   const [hovered, setHovered] = useState(false)
 
   return (
     <div className="landing">
       {/* NAV */}
-      <nav className="lnav">
-        <span className="lnav-logo">
-          <span className="lnav-dot" />
-          PCB Card Maker
-        </span>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button className="btn-ghost" onClick={onGerberViewer} style={{ padding: '8px 16px', fontSize: 13 }}>Gerber Viewer</button>
-          <button className="btn-ghost" onClick={onProjects} style={{ padding: '8px 16px', fontSize: 13 }}>My Projects</button>
-          <button className="btn-primary" onClick={onStart}>Start Editing</button>
-        </div>
-      </nav>
+      <Header />
 
       {/* HERO */}
       <section className="hero">
