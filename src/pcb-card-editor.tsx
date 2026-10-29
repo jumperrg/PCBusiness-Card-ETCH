@@ -744,7 +744,7 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
         background="linear-gradient(90deg, #2f7d73 0%, #3a62a3 50%, #6a4a9e 100%)"
         left={
           <>
-            <div className="w-2.5 h-2.5 rounded-full" style={{ background: HB.textStrong, boxShadow: "0 0 8px rgba(255, 255, 255, 0.6)" }} />
+            <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: HB.textStrong, boxShadow: "0 0 8px rgba(255, 255, 255, 0.6)" }} />
             <span className="font-mono tracking-widest text-[15px] cursor-pointer" style={{ color: HB.text }} onClick={() => navigate('/')}>ETCH</span>
             <span style={{ color: HB.textDim, fontSize: 14 }}>/</span>
             {editingName ? (
@@ -760,13 +760,13 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
             ) : (
               <button
                 onClick={() => { setNameInput(projectName); setEditingName(true); }}
-                className="font-mono text-[14px] hover:underline"
+                className="font-mono text-[14px] hover:underline whitespace-nowrap truncate max-w-[180px]"
                 style={{ color: HB.textDim, background: 'none', border: 'none', cursor: 'text' }}
               >
                 {projectName}
               </button>
             )}
-            <div className="w-px h-6 mx-1.5" style={{ background: HB.sep }} />
+            <div className="w-px h-6 mx-1 shrink-0" style={{ background: HB.sep }} />
             {[
               { label: "NEW", icon: FilePlus, onClick: handleNewProject },
               { label: "IMPORT JSON", icon: FolderOpen, onClick: () => importInputRef.current?.click() },
@@ -777,20 +777,22 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
               { label: "GALLERY", icon: LayoutGrid, onClick: () => navigate("/gallery") },
             ].map((item, i) =>
               item === null ? (
-                <div key={i} className="w-px h-6 mx-1.5" style={{ background: HB.sep }} />
+                <div key={i} className="w-px h-6 mx-1 shrink-0" style={{ background: HB.sep }} />
               ) : (
                 <button
                   key={i}
+                  title={item.label}
                   onClick={item.onClick}
-                  className="tb-btn flex items-center gap-2 px-3 py-2 rounded-md font-mono text-[15px] tracking-wide"
+                  className="tb-btn flex items-center gap-1.5 px-2.5 py-2 rounded-md font-mono text-[14px] tracking-wide whitespace-nowrap shrink-0"
                   style={{ background: "transparent", color: HB.text, border: "none" }}
                 >
                   <item.icon size={16} strokeWidth={2.25} />
-                  {item.label}
+                  {/* labels collapse to icon-only on narrower screens */}
+                  <span className="hidden xl:inline">{item.label}</span>
                 </button>
               )
             )}
-            <div className="w-px h-6 mx-1.5" style={{ background: HB.sep }} />
+            <div className="w-px h-6 mx-1 shrink-0" style={{ background: HB.sep }} />
             {[
               { title: "Undo (Ctrl+Z)", icon: Undo2, onClick: undo, enabled: undoStack.current.length > 0 },
               { title: "Redo (Ctrl+Shift+Z)", icon: Redo2, onClick: redo, enabled: redoStack.current.length > 0 },
@@ -806,11 +808,11 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
                 <b.icon size={16} strokeWidth={2.25} />
               </button>
             ))}
-            <div className="w-px h-6 mx-1.5" style={{ background: HB.sep }} />
-            <div className="flex items-center gap-2 font-mono text-[14px]">
+            <div className="w-px h-6 mx-1 shrink-0" style={{ background: HB.sep }} />
+            <div className="flex items-center gap-1.5 font-mono text-[13px] shrink-0">
               <button
                 onClick={() => setShowDots((s) => !s)}
-                className="tb-chip px-3 py-1.5 rounded-md"
+                className="tb-chip px-2.5 py-1.5 rounded-md whitespace-nowrap"
                 style={{
                   background: showDots ? HB.chipOn : "transparent",
                   color: showDots ? HB.textStrong : HB.textDim,
@@ -819,7 +821,7 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
               >{showDots ? "DOTS ON" : "DOTS OFF"}</button>
               <button
                 onClick={() => setSnapEnabled((s) => !s)}
-                className="tb-chip px-3 py-1.5 rounded-md"
+                className="tb-chip px-2.5 py-1.5 rounded-md whitespace-nowrap"
                 style={{
                   background: snapEnabled ? HB.chipOn : "transparent",
                   color: snapEnabled ? HB.textStrong : HB.textDim,
@@ -828,7 +830,7 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
               >{snapEnabled ? "SNAP ON" : "SNAP OFF"}</button>
               <button
                 onClick={() => setOrthoMode((s) => !s)}
-                className="tb-chip px-3 py-1.5 rounded-md"
+                className="tb-chip px-2.5 py-1.5 rounded-md whitespace-nowrap"
                 style={{
                   background: orthoMode ? HB.chipOn : "transparent",
                   color: orthoMode ? HB.textStrong : HB.textDim,
@@ -839,7 +841,7 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
                 <button
                   key={g}
                   onClick={() => { setGridSize(g); setSnapEnabled(true); }}
-                  className="tb-chip px-3 py-1.5 rounded-md"
+                  className="tb-chip px-2.5 py-1.5 rounded-md whitespace-nowrap"
                   style={{
                     background: snapEnabled && gridSize === g ? HB.textStrong : "transparent",
                     color: snapEnabled && gridSize === g ? HB.ink : HB.textDim,
@@ -858,7 +860,7 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
       >
         <button
           onClick={startOrder}
-          className="tb-cta flex items-center gap-2 px-4 py-2 rounded-md font-mono text-[15px] tracking-wide"
+          className="tb-cta flex items-center gap-2 px-4 py-2 rounded-md font-mono text-[15px] tracking-wide whitespace-nowrap"
           style={{ background: HB.textStrong, color: HB.ink, border: "none", fontWeight: 600 }}
         >
           <ShoppingCart size={16} strokeWidth={2.25} />
