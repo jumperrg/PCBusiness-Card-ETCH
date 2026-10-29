@@ -1097,12 +1097,13 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
                 <rect x={0} y={0} width={board.width} height={board.height} rx={board.corner} ry={board.corner}
                   fill="none" stroke="#ffffff18" strokeWidth={0.4} strokeDasharray="1.5 1" vectorEffect="non-scaling-stroke" />
 
-                {/* bottom copper traces — mirrored to match stored coordinates */}
+                {/* bottom copper traces + SMD pads — mirrored to match stored coordinates
+                    (THT pads are drawn in the mirrored group at the end so they sit above silk) */}
                 {layerVis.bottomCopper && (
                   <g transform={`scale(-1,1) translate(${-board.width}, 0)`}>
                     {elements
                       .filter((e) => e.layer === "bottom" || e.layer === "both")
-                      .filter((e) => e.type === "trace")
+                      .filter((e) => e.type === "trace" || (e.type === "pad" && e.layer === "bottom"))
                       .map((e) => renderElement(e, "copper", true))}
                   </g>
                 )}
@@ -1395,10 +1396,12 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
     }
     if (el.type === "text") {
       const font = FONTS.find((f) => f.key === el.font) || FONTS[0];
+      // stored coords are in the front (top-view) frame; the back view is mirrored, so flip the
+      // anchor position here but keep the glyphs readable (not mirrored)
       return (
         <text
           key={el.id}
-          x={el.x}
+          x={isBack ? board.width - el.x : el.x}
           y={el.y}
           fontSize={el.size}
           fontFamily={font.css}
@@ -1417,7 +1420,7 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
         <image
           key={el.id}
           href={el.src}
-          x={el.x}
+          x={isBack ? board.width - el.x - el.w : el.x}
           y={el.y}
           width={el.w}
           height={el.h}
