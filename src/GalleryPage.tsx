@@ -194,10 +194,6 @@ function CardThumb({ entry }: { entry: GalleryEntry }) {
   const isLight = project.boardColorKey === 'white' || project.boardColorKey === 'yellow'
   const silkColor = isLight ? 'rgba(0,0,0,0.75)' : 'rgba(255,255,255,0.88)'
 
-  const glowMap: Record<string, string> = {
-    green: '#0d9e5270', blue: '#1a5cd470', black: '#6b6e7150',
-    red: '#d4444470', purple: '#a80d9070', yellow: '#c8b40470', white: '#cccccc50',
-  }
 
   // scale: board is 85×54mm, thumbnail viewBox is 170×108 (×2)
   const S = 2
@@ -211,7 +207,7 @@ function CardThumb({ entry }: { entry: GalleryEntry }) {
   return (
     <div className="gallery-card" style={{
       background: bc.fill,
-      boxShadow: `0 0 14px 2px ${glowMap[project.boardColorKey]}, 0 0 36px 4px ${glowMap[project.boardColorKey]}55`,
+      boxShadow: '0 2px 0 #a8975e, 0 4px 0 #9e8d55, 10px 18px 24px -8px rgba(40,36,30,0.4)',
     }}>
       <svg
         viewBox={`0 0 ${W} ${H}`}
@@ -282,8 +278,8 @@ function CardThumb({ entry }: { entry: GalleryEntry }) {
 
 export default function GalleryPage({ onOpenProject }: Props) {
   return (
-    <div className="landing gallery-page">
-      <Header active="gallery" />
+    <div className="landing home gallery-page">
+      <Header active="gallery" light />
 
       <div className="gallery-header">
         <div className="section-label">Community Gallery</div>
@@ -311,7 +307,7 @@ export default function GalleryPage({ onOpenProject }: Props) {
       </div>
 
       <footer className="lfooter">
-        <span>PCB Card Maker — browser-based PCB business card designer</span>
+        <span>ETCH — browser-based PCB business card designer</span>
         <span className="footer-tag">No account required</span>
       </footer>
     </div>

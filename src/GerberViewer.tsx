@@ -357,30 +357,30 @@ export default function GerberViewer({ onBack, initialLayers }: Props) {
   const vbH = boardH + padding * 2
 
   return (
-    <div className="flex flex-col h-screen bg-[#1a1a2e] text-white">
+    <div className="flex flex-col h-screen bg-[#f4f2ed] text-[#1d2126]">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 bg-[#16213e] border-b border-[#0f3460]">
+      <div className="flex items-center gap-3 px-4 py-2.5 bg-white border-b border-[#e1ded6]">
         <button
           onClick={onBack}
-          className="flex items-center gap-1 text-sm text-gray-400 hover:text-white transition-colors"
+          className="flex items-center gap-1 text-sm text-[#565c64] hover:text-[#1d2126] transition-colors"
         >
           <ChevronLeft size={16} />
           Back
         </button>
-        <div className="w-px h-5 bg-[#0f3460]" />
-        <h1 className="font-semibold text-[#e8623a]">Gerber Viewer</h1>
+        <div className="w-px h-5 bg-[#e1ded6]" />
+        <h1 className="!m-0 !text-[15px] !tracking-widest font-mono uppercase !text-[#1d2126]">Gerber Viewer</h1>
         <div className="flex-1" />
         {/* Toolbar */}
-        <button onClick={() => setZoom(z => Math.min(50, z * 1.2))} className="p-1.5 rounded hover:bg-[#0f3460] transition-colors" title="Zoom in">
+        <button onClick={() => setZoom(z => Math.min(50, z * 1.2))} className="p-1.5 rounded text-[#565c64] hover:bg-[#efece6] transition-colors" title="Zoom in">
           <ZoomIn size={16} />
         </button>
-        <button onClick={() => setZoom(z => Math.max(0.1, z * 0.8))} className="p-1.5 rounded hover:bg-[#0f3460] transition-colors" title="Zoom out">
+        <button onClick={() => setZoom(z => Math.max(0.1, z * 0.8))} className="p-1.5 rounded text-[#565c64] hover:bg-[#efece6] transition-colors" title="Zoom out">
           <ZoomOut size={16} />
         </button>
-        <button onClick={fitToView} className="p-1.5 rounded hover:bg-[#0f3460] transition-colors" title="Fit to view">
+        <button onClick={fitToView} className="p-1.5 rounded text-[#565c64] hover:bg-[#efece6] transition-colors" title="Fit to view">
           <RotateCcw size={16} />
         </button>
-        <label className="flex items-center gap-2 px-3 py-1.5 bg-[#e8623a] hover:bg-[#d4522a] rounded text-sm font-medium cursor-pointer transition-colors">
+        <label className="flex items-center gap-2 px-3 py-1.5 bg-[#e8623a] hover:bg-[#d4522a] text-white rounded-md text-sm font-medium cursor-pointer transition-colors">
           <Upload size={14} />
           Load Gerber
           <input type="file" multiple accept=".gbr,.gtl,.gbl,.gts,.gbs,.gto,.gbo,.gtp,.gbp,.gko,.gbr,.drl,.xln,.ger,.art" className="hidden" onChange={onFileInput} />
@@ -389,17 +389,17 @@ export default function GerberViewer({ onBack, initialLayers }: Props) {
 
       <div className="flex flex-1 min-h-0">
         {/* Sidebar */}
-        <div className="w-56 bg-[#16213e] border-r border-[#0f3460] flex flex-col">
-          <div className="flex items-center gap-2 px-3 py-2 border-b border-[#0f3460]">
-            <Layers size={14} className="text-gray-400" />
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Layers</span>
+        <div className="w-56 bg-white border-r border-[#e1ded6] flex flex-col">
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-[#e1ded6]">
+            <Layers size={14} className="text-[#8d9299]" />
+            <span className="text-xs font-semibold text-[#8d9299] uppercase tracking-wider">Layers</span>
           </div>
           <div className="flex-1 overflow-y-auto">
             {layers.length === 0 && (
-              <p className="text-xs text-gray-500 p-3">No layers loaded</p>
+              <p className="text-xs text-[#8d9299] p-3">No layers loaded</p>
             )}
             {layers.map(layer => (
-              <div key={layer.id} className="flex items-center gap-2 px-3 py-2 hover:bg-[#0f3460] group transition-colors">
+              <div key={layer.id} className="flex items-center gap-2 px-3 py-2 hover:bg-[#f4f2ed] group transition-colors">
                 <button
                   onClick={() => toggleLayer(layer.id)}
                   className="w-3 h-3 rounded-sm border flex-shrink-0 transition-opacity"
@@ -409,12 +409,12 @@ export default function GerberViewer({ onBack, initialLayers }: Props) {
                   }}
                   title={layer.visible ? 'Hide layer' : 'Show layer'}
                 />
-                <span className="text-xs flex-1 truncate text-gray-300" title={layer.parsed.name}>
+                <span className="text-xs flex-1 truncate text-[#1d2126]" title={layer.parsed.name}>
                   {layer.parsed.name}
                 </span>
                 <button
                   onClick={() => removeLayer(layer.id)}
-                  className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 transition-all"
+                  className="opacity-0 group-hover:opacity-100 text-[#8d9299] hover:text-red-600 transition-all"
                   title="Remove layer"
                 >
                   <X size={12} />
@@ -422,15 +422,15 @@ export default function GerberViewer({ onBack, initialLayers }: Props) {
               </div>
             ))}
           </div>
-          <div className="p-3 border-t border-[#0f3460] text-xs text-gray-500">
+          <div className="p-3 border-t border-[#e1ded6] text-xs text-[#8d9299]">
             Scroll to zoom · Drag to pan
           </div>
         </div>
 
         {/* Canvas */}
         <div
-          className="flex-1 relative overflow-hidden"
-          style={{ background: '#0d1117', cursor: dragging ? 'grabbing' : 'grab' }}
+          className="drafting-canvas flex-1 relative overflow-hidden"
+          style={{ backgroundColor: '#f8f7f3', cursor: dragging ? 'grabbing' : 'grab' }}
           onDrop={onDrop}
           onDragOver={e => e.preventDefault()}
           onMouseDown={onMouseDown}
@@ -440,7 +440,7 @@ export default function GerberViewer({ onBack, initialLayers }: Props) {
           onWheel={onWheel}
         >
           {layers.length === 0 ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-gray-600 select-none pointer-events-none">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-[#8d9299] select-none pointer-events-none">
               <Upload size={48} strokeWidth={1} />
               <p className="text-lg font-medium">Drop Gerber files here</p>
               <p className="text-sm">or use the Load Gerber button</p>
@@ -492,7 +492,7 @@ export default function GerberViewer({ onBack, initialLayers }: Props) {
           )}
 
           {error && (
-            <div className="absolute bottom-4 left-4 right-4 bg-red-900/80 text-red-200 text-xs px-3 py-2 rounded flex items-center justify-between">
+            <div className="absolute bottom-4 left-4 right-4 bg-red-50 border border-red-200 text-red-700 text-xs px-3 py-2 rounded flex items-center justify-between">
               <span>{error}</span>
               <button onClick={() => setError(null)}><X size={12} /></button>
             </div>

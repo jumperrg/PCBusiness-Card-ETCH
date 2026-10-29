@@ -1,20 +1,20 @@
-// UI chrome palette — medium grey + grapefruit
+// UI chrome palette — drafting paper + grapefruit
 export const UI = {
   // backgrounds
-  bgApp:       "#383838",
-  bgPanel:     "#444444",
-  bgCanvas:    "#323232",
-  bgInput:     "#3c3c3c",
-  bgChipOn:    "#4e4e4e",
+  bgApp:       "#f4f2ed",
+  bgPanel:     "#ffffff",
+  bgCanvas:    "#f8f7f3",
+  bgInput:     "#f7f6f2",
+  bgChipOn:    "#efece6",
 
   // borders
-  border:      "#555555",
-  borderSub:   "#4a4a4a",
+  border:      "#e1ded6",
+  borderSub:   "#e6e3dc",
 
   // text
-  textPrimary: "#ede9e4",
-  textMuted:   "#b0a89e",
-  textFaint:   "#7e766e",
+  textPrimary: "#1d2126",
+  textMuted:   "#565c64",
+  textFaint:   "#8d9299",
 
   // accent — grapefruit orange
   accent:      "#e8623a",
@@ -23,8 +23,11 @@ export const UI = {
 
   // danger
   danger:      "#c0392b",
-  dangerBg:    "rgba(192,57,43,0.15)",
-  dangerBorder:"#7a2a24",
+  dangerBg:    "rgba(192,57,43,0.08)",
+  dangerBorder:"#f0c4bd",
+
+  // floating panels
+  shadow:      "0 1px 2px rgba(40,36,30,0.06), 0 12px 32px -12px rgba(40,36,30,0.22)",
 } as const;
 
 // PCB board solder-mask / copper colors (never change these)

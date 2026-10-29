@@ -13,9 +13,39 @@ interface Props {
   right?: ReactNode
   /** Hide the GALLERY / PROJECTS links (the editor exposes them via its File menu instead). */
   hideNav?: boolean
+  /** Paper-style site nav used on the landing, gallery and projects pages. */
+  light?: boolean
 }
 
-export default function Header({ active, left, children, right, hideNav }: Props) {
+function LightHeader({ active }: Pick<Props, 'active'>) {
+  return (
+    <nav className="site-nav">
+      <div className="site-nav-inner">
+        <button className="site-nav-logo" onClick={() => navigate('/')}>
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+            <rect x="2.5" y="5" width="19" height="14" rx="2.5" fill="#066434" />
+            <path d="M6 15.5h4l2-3h5.5" fill="none" stroke="#7fd3a4" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+            <circle cx="17.5" cy="12.5" r="1.6" fill="#e2b85a" />
+            <circle cx="6" cy="9" r="1.3" fill="#e2b85a" />
+          </svg>
+          ETCH
+        </button>
+        <div className="site-nav-links">
+          <button className={active === 'gallery' ? 'is-active' : ''} onClick={() => navigate('/gallery')}>
+            <LayoutGrid size={15} strokeWidth={2} />Gallery
+          </button>
+          <button className={active === 'projects' ? 'is-active' : ''} onClick={() => navigate('/projects')}>
+            <BookOpen size={15} strokeWidth={2} />Projects
+          </button>
+          <button className="site-nav-cta" onClick={() => navigate('/editor')}>Start Editing →</button>
+        </div>
+      </div>
+    </nav>
+  )
+}
+
+export default function Header({ active, left, children, right, hideNav, light }: Props) {
+  if (light) return <LightHeader active={active} />
   return (
     <div
       className="flex items-center justify-between px-4 py-2 border-b shrink-0"

@@ -1,147 +1,208 @@
-import { useState } from 'react'
-import { BOARD_COLORS } from './colors'
+import { useRef, type CSSProperties } from 'react'
+import { BOARD_COLORS, type BoardColorKey } from './colors'
 import Header from './Header'
+import PcbCardFace, { type CardVariant } from './PcbCardFace'
+import './landing.css'
 
 interface Props {
   onStart: () => void
   onGallery: () => void
+  onProjects?: () => void
+  onGerberViewer?: () => void
 }
 
-const CARD_REST = [
-  'rotate(-3deg) translateY(16px) translateX(-10px)',
-  'rotate(1.5deg) translateY(10px) translateX(8px)',
-  'rotate(0deg)',
+interface DeskCard {
+  color: BoardColorKey
+  variant: CardVariant
+  name: string
+  role: string
+  lines: string[]
+  x: number
+  y: number
+  r: number
+  z: number
+  dims?: boolean
+}
+
+// positions are px from the desk-plane centre; z is stacking order
+const DESK_CARDS: DeskCard[] = [
+  { color: 'white', variant: 'tech', name: 'Grace Hopper', role: 'Compiler Engineer', lines: ['grace@cobol.dev', 'hopper.systems'], x: -290, y: -235, r: -2, z: 0 },
+  { color: 'purple', variant: 'pcb', name: 'Nikola Tesla', role: 'Power Electronics', lines: ['nikola@ac.grid', '+1 555 0110'], x: 250, y: -230, r: 24, z: 0 },
+  { color: 'blue', variant: 'tech', name: 'Max Planck', role: 'RF / Antenna Design', lines: ['max@planck.dev', 'planck-rf.com', '@maxrf'], x: -300, y: 140, r: 20, z: 1 },
+  { color: 'green', variant: 'pcb', name: 'Ada Lovelace', role: 'Firmware Engineer', lines: ['ada@lovelace.io', 'github.com/ada'], x: -10, y: -20, r: 8, z: 2, dims: true },
+  { color: 'black', variant: 'tech', name: 'Lise Meitner', role: 'PCB Layout Artist', lines: ['lise@meitner.io', 'meitner.design', '@lise.pcb'], x: 280, y: 170, r: -1, z: 3 },
+  { color: 'red', variant: 'pcb', name: 'Alan Turing', role: 'Embedded Systems', lines: ['alan@enigma.uk', 'turing.engineering'], x: -20, y: 330, r: 28, z: 1 },
 ]
-const CARD_HOVER = [
-  'rotate(-4deg) translateY(24px) translateX(-26px)',
-  'rotate(2.5deg)  translateY(17px) translateX(22px)',
-  'rotate(0deg)    translateY(-4px)',
+
+// loose SMD parts scattered on the desk: [x, y, rotation, kind]
+const PARTS: [number, number, number, 'r' | 'c' | 'led'][] = [
+  [190, -60, 30, 'r'], [222, -30, -12, 'c'], [-210, -40, 70, 'r'],
+  [130, 90, 10, 'led'], [-150, 330, -40, 'c'], [470, -20, 55, 'r'], [-520, -40, -20, 'led'],
 ]
+
+const STEPS = [
+  { title: 'Design', desc: 'Place text, traces, pads and vias. Then pick a board color.' },
+  { title: 'Preview', desc: 'Toggle copper, silkscreen and mask layers for an accurate render of the finished board.' },
+  { title: 'Export', desc: 'Download Gerbers that every major PCB fabricator accepts.' },
+  { title: 'Order', desc: 'Upload to JLCPCB, PCBWay or OSH Park. Five cards typically cost under $5.' },
+]
+
+
+function DeskSketch() {
+  // technical-drawing linework that lies on the desk plane
+  return (
+    <svg className="desk-sketch" viewBox="0 0 1800 1400" aria-hidden="true">
+      <defs>
+        <pattern id="desk-dots" width="24" height="24" patternUnits="userSpaceOnUse">
+          <circle cx="12" cy="12" r="1.6" fill="var(--grid-dot)" />
+        </pattern>
+      </defs>
+      <rect width="1800" height="1400" fill="url(#desk-dots)" />
+
+      <g fill="none" stroke="var(--ink)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        {/* ghost card outlines */}
+        <rect x="1220" y="880" width="340" height="216" rx="12" strokeDasharray="10 7" transform="rotate(8 1390 988)" />
+        <rect x="260" y="200" width="340" height="216" rx="12" strokeDasharray="10 7" transform="rotate(-24 430 308)" />
+
+        {/* resistor + capacitor + ground schematic */}
+        <path d="M1240 300 H1290 l10 -18 l20 36 l20 -36 l20 36 l20 -36 l10 18 H1440 V380 M1420 380 H1460 M1420 392 H1460 M1440 392 V460 M1414 460 H1466 M1424 472 H1456 M1434 484 H1446" />
+        <circle cx="1240" cy="300" r="5" />
+        <text x="1300" y="270" className="sk-text">R1 10k</text>
+        <text x="1472" y="392" className="sk-text">C1 100n</text>
+
+        {/* op-amp */}
+        <path d="M240 960 V1100 L360 1030 Z M200 990 H240 M200 1070 H240 M360 1030 H430 M216 990 V940 H400 V1030" />
+        <text x="252" y="1000" className="sk-text">−</text>
+        <text x="252" y="1080" className="sk-text">+</text>
+        <text x="250" y="1130" className="sk-text">U2 OPA344</text>
+
+        {/* crop marks */}
+        <path d="M120 120 h50 M120 120 v50 M1680 120 h-50 M1680 120 v50 M120 1280 h50 M120 1280 v-50 M1680 1280 h-50 M1680 1280 v-50" />
+
+        {/* title block */}
+        <rect x="1330" y="1150" width="330" height="110" />
+        <path d="M1330 1190 H1660 M1500 1190 V1260 M1330 1225 H1660" />
+      </g>
+      <g className="sk-text">
+        <text x="1342" y="1178" className="sk-title">ETCH · PCB BUSINESS CARD</text>
+        <text x="1342" y="1214">SCALE 1:1</text>
+        <text x="1512" y="1214">SHEET 1/1</text>
+        <text x="1342" y="1250">85 × 54 × 1.6</text>
+        <text x="1512" y="1250">REV A</text>
+      </g>
+    </svg>
+  )
+}
+
+function Dimensions() {
+  // dimension lines drawn in the card's own frame (340 × 216 px)
+  return (
+    <svg className="dcard-dims" viewBox="-60 -60 460 336" aria-hidden="true">
+      <g fill="none" stroke="var(--ink-strong)" strokeWidth="1.2">
+        <path d="M0 -6 V-44 M340 -6 V-44 M0 -32 H340" />
+        <path d="M0 -32 l10 -4 v8 z M340 -32 l-10 -4 v8 z" fill="var(--ink-strong)" />
+        <path d="M-6 0 H-44 M-6 216 H-44 M-32 0 V216" />
+        <path d="M-32 0 l-4 10 h8 z M-32 216 l-4 -10 h8 z" fill="var(--ink-strong)" />
+      </g>
+      <text x="170" y="-40" textAnchor="middle" className="dim-text">85.00</text>
+      <text x="-40" y="108" textAnchor="middle" className="dim-text" transform="rotate(-90 -40 108)">54.00</text>
+    </svg>
+  )
+}
+
+function Part({ kind }: { kind: 'r' | 'c' | 'led' }) {
+  return (
+    <div className={`part part-${kind}`}>
+      <span className="part-cap" /><span className="part-body">{kind === 'r' ? '103' : ''}</span><span className="part-cap" />
+    </div>
+  )
+}
 
 export default function LandingPage({ onStart, onGallery }: Props) {
-  const [hovered, setHovered] = useState(false)
+  const sceneRef = useRef<HTMLDivElement>(null)
+
+  const onMove = (e: React.MouseEvent) => {
+    const el = sceneRef.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    el.style.setProperty('--px', ((e.clientX - r.left) / r.width - 0.5).toFixed(3))
+    el.style.setProperty('--py', ((e.clientY - r.top) / r.height - 0.5).toFixed(3))
+  }
+  const onLeave = () => {
+    sceneRef.current?.style.setProperty('--px', '0')
+    sceneRef.current?.style.setProperty('--py', '0')
+  }
 
   return (
-    <div className="landing">
-      {/* NAV */}
-      <Header />
+    <div className="landing home">
+      <Header light />
 
       {/* HERO */}
-      <section className="hero">
-        {/* big background typography */}
-        <div className="hero-bg-type" aria-hidden="true">
-          <span>PCB</span>
-          <span>DESIGN</span>
-          <span>TRACES</span>
-          <span>COPPER</span>
-          <span>GERBER</span>
-          <span>VIAS</span>
-        </div>
-        <div className="hero-grid-bg" />
-
-        {/* two-column hero */}
-        <div className="hero-content">
-          <div className="hero-text">
-            <h1>Business cards <br /><em>for</em> engineers</h1>
-            <p className="hero-sub">
-              Design real PCB-style business cards in your browser.
-            </p>
-            <div className="hero-actions">
-              <button className="btn-primary btn-lg" onClick={onStart}>Start Editing →</button>
-              <button className="btn-ghost btn-lg" onClick={onGallery}>Explore Gallery</button>
-            </div>
+      <section className="home-hero" onMouseMove={onMove} onMouseLeave={onLeave}>
+        <div className="home-hero-text">
+          <div className="home-eyebrow"><span className="eyebrow-dot" />PCB business card editor</div>
+          <h1>Business cards <br /><em>etched</em> in copper</h1>
+          <p className="hero-sub">
+            Design real, manufacturable PCB business cards in your browser — route <b>traces</b>,
+            place <b>pads</b> and <b>silkscreen</b>, then export Gerbers and order them from any fab.
+          </p>
+          <div className="hero-actions">
+            <button className="btn-primary btn-lg" onClick={onStart}>Start Editing →</button>
+            <button className="btn-ghost btn-lg" onClick={onGallery}>Explore Gallery</button>
           </div>
+          <div className="hero-meta">
+            <span>85 × 54 mm</span><span>7 mask colors</span><span>Gerber export</span>
+          </div>
+        </div>
 
-          {/* PCB card stack on the right */}
-          <div
-            className="pcb-stack"
-            onMouseEnter={() => setHovered(true)}
-            onMouseLeave={() => setHovered(false)}
-          >
-            <div className="pcb-card pcb-green" style={{ transform: hovered ? CARD_HOVER[0] : CARD_REST[0] }}>
-              <svg className="pcb-traces" viewBox="0 0 340 200" preserveAspectRatio="none">
-                <line x1="30" y1="0" x2="30" y2="200" stroke="#0d9e52" strokeWidth="1" opacity="0.35" />
-                <line x1="0" y1="60" x2="340" y2="60" stroke="#0d9e52" strokeWidth="1" opacity="0.25" />
-                <circle cx="30" cy="60" r="4" fill="#03865a" opacity="0.5" />
-              </svg>
-            </div>
-            <div className="pcb-card pcb-blue" style={{ transform: hovered ? CARD_HOVER[1] : CARD_REST[1] }}>
-              <svg className="pcb-traces" viewBox="0 0 340 200" preserveAspectRatio="none">
-                <line x1="60" y1="0" x2="60" y2="200" stroke="#1a5cd4" strokeWidth="1" opacity="0.4" />
-                <line x1="0" y1="100" x2="340" y2="100" stroke="#1a5cd4" strokeWidth="1" opacity="0.3" />
-                <circle cx="60" cy="100" r="5" fill="none" stroke="#015bbc" strokeWidth="1.5" opacity="0.6" />
-              </svg>
-            </div>
-            <div className="pcb-card pcb-black" style={{ transform: hovered ? CARD_HOVER[2] : CARD_REST[2] }}>
-              <svg className="pcb-traces" viewBox="0 0 340 200" preserveAspectRatio="none">
-                <line x1="0" y1="40" x2="200" y2="40" stroke="#6b6e71" strokeWidth="1.2" opacity="0.5" />
-                <line x1="200" y1="40" x2="200" y2="160" stroke="#6b6e71" strokeWidth="1.2" opacity="0.5" />
-                <line x1="200" y1="160" x2="310" y2="160" stroke="#6b6e71" strokeWidth="1.2" opacity="0.5" />
-                <circle cx="200" cy="40" r="4" fill="none" stroke="#6b6e71" strokeWidth="1.5" opacity="0.7" />
-                <circle cx="200" cy="160" r="4" fill="none" stroke="#6b6e71" strokeWidth="1.5" opacity="0.7" />
-              </svg>
-              <div className="pcb-silk">
-                <div className="pcb-name">Alex Ivanova</div>
-                <div className="pcb-role">Embedded Systems Engineer</div>
+        <div className="desk-scene" ref={sceneRef}>
+          <div className="desk-plane">
+            <DeskSketch />
+            {PARTS.map(([x, y, r, kind], i) => (
+              <div key={i} className="part-wrap" style={{ transform: `translate(${x}px, ${y}px) rotate(${r}deg)` }}>
+                <Part kind={kind} />
               </div>
-              <div className="pcb-contacts pcb-silk">
-                <span>alex@example.io</span>
-                <span>github.com/alex</span>
+            ))}
+            {DESK_CARDS.map((c, i) => (
+              <div
+                key={c.name}
+                className="dcard"
+                onClick={onGallery}
+                style={{
+                  transform: `translate(${c.x}px, ${c.y}px) rotate(${c.r}deg) translateZ(${c.z * 10}px)`,
+                  '--delay': `${0.15 + i * 0.12}s`,
+                } as CSSProperties}
+              >
+                <div className="dcard-shadow" />
+                {c.dims && <Dimensions />}
+                <div className={`dcard-body${c.color === 'white' ? ' is-light' : ''}`}>
+                  <div className="dcard-edge" />
+                  <div className="dcard-edge e2" />
+                  <PcbCardFace color={c.color} variant={c.variant} name={c.name} role={c.role} lines={c.lines} />
+                </div>
               </div>
-              <div className="pcb-pads">
-                <div className="pad" /><div className="pad" />
-                <div className="pad" /><div className="pad" />
-              </div>
-              <span className="corner-mark tl">REV 1.0</span>
-              <span className="corner-mark br">JLCPCB</span>
-            </div>
+            ))}
           </div>
         </div>
       </section>
 
-      <hr className="ldivider" />
-
-      {/* FEATURES */}
-      {/* <section className="lsection">
-        <div className="section-label">Features</div>
-        <h2>Everything you need, nothing you don't</h2>
-        <p className="section-sub">A focused tool built for one thing: PCB business cards. No bloat, no subscriptions.</p>
-        <div className="features-grid">
-          {FEATURES.map(f => (
-            <div className="feature" key={f.title}>
-              <div className="feature-icon">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8"
-                  dangerouslySetInnerHTML={{ __html: f.path }} />
-              </div>
-              <h3>{f.title}</h3>
-              <p>{f.desc}</p>
-            </div>
-          ))}
-        </div>
-      </section> */}
-
-      <hr className="ldivider" />
 
       {/* BOARD COLORS */}
-      <section className="colors-section">
-        <div className="section-label">Board Colors</div>
+      <section className="lsection">
+        <div className="section-label">Board colors</div>
         <h2>Seven authentic solder mask colors</h2>
         <p className="section-sub">Each color is sampled from real PCB fabrication stock.</p>
-        <div className="color-swatches">
-          {BOARD_COLORS.map(c => (
-            <div className="swatch" key={c.key}>
-              <div className="swatch-board" style={{ background: c.fill,
-                boxShadow: c.key === 'white'
-                  ? '0 6px 20px rgba(0,0,0,0.3), inset 0 0 0 1px rgba(0,0,0,0.1)'
-                  : '0 6px 20px rgba(0,0,0,0.5)'
-              }} />
+        <div className="color-row">
+          {BOARD_COLORS.map((c, i) => (
+            <div className="color-chip" key={c.key}>
+              <div className="color-chip-card">
+                <PcbCardFace color={c.key} variant={i % 2 ? 'tech' : 'pcb'} name={c.label} role="Solder mask" lines={[]} />
+              </div>
               <span className="swatch-label">{c.label}</span>
             </div>
           ))}
         </div>
       </section>
-
-      <hr className="ldivider" />
 
       {/* HOW IT WORKS */}
       <section className="lsection" id="how-it-works">
@@ -156,67 +217,16 @@ export default function LandingPage({ onStart, onGallery }: Props) {
             </div>
           ))}
         </div>
-      </section>
-
-      <hr className="ldivider" />
-
-      {/* CTA */}
-      <section className="cta-section">
-        <div className="cta-glow" />
-        <div className="terminal-chip">
-          <span>pcb-card-maker</span>
-          <span className="blink-cursor" />
+        <div className="steps-action">
+          <button className="btn-primary btn-lg" onClick={onStart}>Start Editing →</button>
         </div>
-        <h2>Stop handing out paper.<br />Hand out a PCB.</h2>
-        <p className="section-sub">Open the editor right now — no sign-up, no credit card.</p>
-        <button className="btn-primary btn-lg" onClick={onStart}>Start Editing →</button>
       </section>
 
-      {/* FOOTER */}
+
       <footer className="lfooter">
-        <span>PCB Card Maker — browser-based PCB business card designer</span>
+        <span>ETCH — browser-based PCB business card designer</span>
         <span className="footer-tag">No account required</span>
       </footer>
     </div>
   )
 }
-
-const FEATURES = [
-  {
-    title: 'Runs in the Browser',
-    desc: 'No install, no account. Open the editor and start designing immediately. Your data never leaves your machine.',
-    path: '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',
-  },
-  {
-    title: '7 Board Colors',
-    desc: 'Choose from authentic solder mask colors — green, black, white, blue, red, yellow, purple — matched to real PCB fab samples.',
-    path: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>',
-  },
-  {
-    title: 'Trace Routing',
-    desc: 'Draw copper traces, place vias and pads just like a real EDA tool. Snap to grid, bend at 45°, keep it clean.',
-    path: '<path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>',
-  },
-  {
-    title: 'Export to SVG',
-    desc: 'Download production-ready files. Order 5 cards for a few dollars at JLCPCB, PCBWay, or any fab house.',
-    path: '<path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
-  },
-  {
-    title: 'Silkscreen Text',
-    desc: 'Add your name, email, handle, QR code — whatever fits on a standard 85 × 54 mm business card format.',
-    path: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>',
-  },
-  {
-    title: 'Accurate Preview',
-    desc: 'See exactly what your board will look like before ordering. Copper, silkscreen, and board outline rendered faithfully.',
-    path: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/>',
-  },
-]
-
-const STEPS = [
-  { title: 'Design', desc: 'Use the editor to place text, traces, pads, and vias. Choose your board color.' },
-  { title: 'Preview', desc: 'Toggle between layers and get an accurate render of the finished board.' },
-  { title: 'Export', desc: 'Download your SVG file — compatible with every major PCB fabricator.' },
-  { title: 'Order', desc: 'Upload to JLCPCB, PCBWay, or OSHPark. A batch of 5 cards typically costs under $5.' },
-]

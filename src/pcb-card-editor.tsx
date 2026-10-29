@@ -847,7 +847,7 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
           style={{
             background: UI.bgPanel,
             border: `1px solid ${UI.border}`,
-            boxShadow: "0 8px 32px 0 rgba(0,0,0,0.6), 0 0 0 1px rgba(201,168,76,0.12)",
+            boxShadow: UI.shadow,
           }}
         >
           {TOOLS.map((t) => {
@@ -910,8 +910,8 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
 
         {/* Canvas */}
         <div
-          className="flex-1 flex flex-col items-center justify-center overflow-hidden relative"
-          style={{ background: UI.bgCanvas, cursor: panDrag ? "grabbing" : undefined }}
+          className="drafting-canvas flex-1 flex flex-col items-center justify-center overflow-hidden relative"
+          style={{ backgroundColor: UI.bgCanvas, cursor: panDrag ? "grabbing" : undefined }}
           onWheel={handleWheel}
           onContextMenu={(e) => e.preventDefault()}
           onPointerDown={startPan}
@@ -1158,7 +1158,7 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
           style={{
             background: UI.bgPanel,
             border: `1px solid ${UI.border}`,
-            boxShadow: "0 8px 32px 0 rgba(0,0,0,0.6)",
+            boxShadow: UI.shadow,
           }}
         >
           <span className="font-mono text-[12px] tracking-widest" style={{ color: UI.textFaint }}>
@@ -1204,7 +1204,7 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
           style={{
             background: UI.bgPanel,
             border: `1px solid ${UI.border}`,
-            boxShadow: "0 8px 32px 0 rgba(0,0,0,0.6)",
+            boxShadow: UI.shadow,
             color: UI.textMuted,
           }}
         >
@@ -1219,7 +1219,7 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
           style={{
             background: UI.bgPanel,
             border: `1px solid ${UI.border}`,
-            boxShadow: "0 8px 32px 0 rgba(0,0,0,0.6)",
+            boxShadow: UI.shadow,
             width: layersOpen ? "140px" : "56px",
             transition: "width 0.2s ease",
           }}
@@ -1239,13 +1239,13 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
                   onClick={() => setLayerVis((v) => ({ ...v, [l.key]: !v[l.key] }))}
                   className="flex items-center justify-center gap-2 px-2 py-1.5 rounded-lg transition"
                   style={{
-                    background: on ? "rgba(255,255,255,0.05)" : "transparent",
+                    background: on ? UI.bgChipOn : "transparent",
                     border: `1px solid ${on ? l.swatch + "60" : "transparent"}`,
                   }}
                 >
                   <span
                     className="w-2.5 h-2.5 rounded-sm shrink-0"
-                    style={{ background: on ? l.swatch : UI.borderSub }}
+                    style={{ background: on ? l.swatch : UI.borderSub, boxShadow: "inset 0 0 0 1px rgba(40,36,30,0.25)" }}
                   />
                   {layersOpen && (
                     <span className="font-mono text-[12px] tracking-wide whitespace-nowrap overflow-hidden" style={{ color: on ? UI.textPrimary : UI.textFaint }}>
@@ -1265,7 +1265,7 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
           style={{
             background: UI.bgPanel,
             border: `1px solid ${UI.border}`,
-            boxShadow: "0 8px 32px 0 rgba(0,0,0,0.6), 0 0 0 1px rgba(201,168,76,0.12)",
+            boxShadow: UI.shadow,
             maxHeight: "calc(100% - 2rem)",
             width: specOpen ? "16rem" : "auto",
             transition: "width 0.2s ease",
