@@ -11,9 +11,11 @@ interface Props {
   children?: ReactNode
   /** Replaces the default "Start Editing" CTA on the right. Pass null to omit it. */
   right?: ReactNode
+  /** Hide the GALLERY / PROJECTS links (the editor exposes them via its File menu instead). */
+  hideNav?: boolean
 }
 
-export default function Header({ active, left, children, right }: Props) {
+export default function Header({ active, left, children, right, hideNav }: Props) {
   return (
     <div
       className="flex items-center justify-between px-4 py-2 border-b shrink-0"
@@ -35,6 +37,7 @@ export default function Header({ active, left, children, right }: Props) {
       </div>
 
       <div className="flex items-center gap-2">
+        {!hideNav && <>
         <button
           onClick={() => navigate('/gallery')}
           className="flex items-center gap-1.5 px-2 py-1.5 font-mono text-[15px] tracking-wide hover:underline"
@@ -51,6 +54,7 @@ export default function Header({ active, left, children, right }: Props) {
           <BookOpen size={13} strokeWidth={2.5} />
           PROJECTS
         </button>
+        </>}
         {children}
         {right !== undefined ? right : (
           <button

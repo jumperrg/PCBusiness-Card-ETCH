@@ -19,8 +19,13 @@ import {
   Download,
   Trash2,
   FolderOpen,
+  FilePlus,
+  LayoutGrid,
+  BookOpen,
   ChevronDown,
   ChevronUp,
+  Undo2,
+  Redo2,
 } from "lucide-react";
 
 // ---- constants -------------------------------------------------------
@@ -93,7 +98,7 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
   const [panDrag, setPanDrag] = useState(null); // { startX, startY, origX, origY }
   const [gridSize, setGridSize] = useState(2.54);
   const [snapEnabled, setSnapEnabled] = useState(true);
-  const [orthoMode, setOrthoMode] = useState(false);
+  const [orthoMode, setOrthoMode] = useState(true);
   const [showDots, setShowDots] = useState(true);
   const [boardColorKey, setBoardColorKey] = useState("green");
 
@@ -101,7 +106,85 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
   const [projectId, setProjectId] = useState<string | undefined>(undefined);
   const [projectName, setProjectName] = useState("Untitled");
   const [editingName, setEditingName] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
   const [nameInput, setNameInput] = useState("Untitled");
+
+  // ---- undo / redo history ----
+  // Snapshots of the document (board, color, elements). Changes are committed once they settle:
+  // a whole drag becomes one entry, and rapid typing into a properties field is merged.
+  type Snapshot = { board: typeof board; boardColorKey: string; elements: any[] };
+  const HISTORY_LIMIT = 200;
+  const undoStack = useRef<Snapshot[]>([]);
+  const redoStack = useRef<Snapshot[]>([]);
+  const committed = useRef<Snapshot>({ board, boardColorKey, elements });
+  const lastCommitAt = useRef(0);
+  const [, setHistoryTick] = useState(0);
+  const bumpHistory = () => setHistoryTick((t) => t + 1);
+
+  const resetHistory = (snap: Snapshot) => {
+    undoStack.current = [];
+    redoStack.current = [];
+    committed.current = snap;
+    bumpHistory();
+  };
+
+  useEffect(() => {
+    if (dragging) return; // commit the drag as a single step when it ends
+    const prev = committed.current;
+    if (prev.board === board && prev.boardColorKey === boardColorKey && prev.elements === elements) return;
+    const now = Date.now();
+    const tag = document.activeElement?.tagName;
+    const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+    if (!(typing && now - lastCommitAt.current < 1000 && undoStack.current.length > 0)) {
+      undoStack.current.push(prev);
+      if (undoStack.current.length > HISTORY_LIMIT) undoStack.current.shift();
+    }
+    redoStack.current = [];
+    committed.current = { board, boardColorKey, elements };
+    lastCommitAt.current = now;
+    bumpHistory();
+  }, [board, boardColorKey, elements, dragging]);
+
+  const restoreSnapshot = (snap: Snapshot) => {
+    committed.current = snap;
+    lastCommitAt.current = 0;
+    setBoard(snap.board);
+    setBoardColorKey(snap.boardColorKey);
+    setElements(snap.elements);
+    setSelectedId((id) => (snap.elements.some((e) => e.id === id) ? id : null));
+    setDrawingPoints([]);
+    setDrawingConnections([]);
+    setCursorPt(null);
+    bumpHistory();
+  };
+
+  const undo = () => {
+    if (dragging || undoStack.current.length === 0) return;
+    redoStack.current.push(committed.current);
+    restoreSnapshot(undoStack.current.pop()!);
+  };
+
+  const redo = () => {
+    if (dragging || redoStack.current.length === 0) return;
+    undoStack.current.push(committed.current);
+    restoreSnapshot(redoStack.current.pop()!);
+  };
+
+  // Ctrl/Cmd+Z = undo, Ctrl/Cmd+Shift+Z or Ctrl+Y = redo (text fields keep their native undo)
+  const historyKeysRef = useRef({ undo, redo });
+  historyKeysRef.current = { undo, redo };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      const tag = (document.activeElement as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      const key = e.key.toLowerCase();
+      if (key === "z" && !e.shiftKey) { e.preventDefault(); historyKeysRef.current.undo(); }
+      else if ((key === "z" && e.shiftKey) || key === "y") { e.preventDefault(); historyKeysRef.current.redo(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   useEffect(() => { if (initialProject) applyProject(initialProject); }, []);
 
@@ -136,8 +219,9 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
     skipNextAutosave.current = true;
     if (p.board) setBoard(p.board);
     if (p.boardColorKey) setBoardColorKey(p.boardColorKey);
+    let normalized = elements;
     if (Array.isArray(p.elements)) {
-      const normalized = p.elements.map((e: any) => {
+      normalized = p.elements.map((e: any) => {
         if (e.layer === 'topSilk' || e.layer === 'topCopper') return { ...e, layer: 'top' }
         if (e.layer === 'bottomSilk' || e.layer === 'bottomCopper') return { ...e, layer: 'bottom' }
         return e
@@ -145,6 +229,8 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
       setElements(normalized)
       setSelectedId(null)
     }
+    // a freshly opened project starts with an empty history
+    resetHistory({ board: p.board ?? board, boardColorKey: p.boardColorKey ?? boardColorKey, elements: normalized });
     setProjectId(p.id);
     setProjectName(p.name ?? "Untitled");
     setNameInput(p.name ?? "Untitled");
@@ -152,9 +238,12 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
 
   const handleNewProject = () => {
     skipNextAutosave.current = true;
-    setBoard({ width: 85, height: 54, corner: 3 });
+    const newBoard = { width: 85, height: 54, corner: 3 };
+    const newElements: any[] = [];
+    setBoard(newBoard);
     setBoardColorKey("green");
-    setElements([]);
+    setElements(newElements);
+    resetHistory({ board: newBoard, boardColorKey: "green", elements: newElements });
     setSelectedId(null);
     setProjectId(undefined);
     setProjectName("Untitled");
@@ -185,6 +274,8 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
   const backViewH = board.height + gapMM + marginMM;
 
   const selected = elements.find((e) => e.id === selectedId) || null;
+  const COLORABLE_TYPES = ["trace", "text", "hole"];
+  const selectedColorable = !!selected && COLORABLE_TYPES.includes(selected.type);
 
   // ---- coordinate helpers ----
 
@@ -235,6 +326,57 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
     const axisStep = isDiag ? gridSize * Math.SQRT2 : gridSize;
     const snappedDist = snapEnabled ? Math.round(rawDist / axisStep) * axisStep : rawDist;
     return { x: from.x + snappedDist * cos45, y: from.y + snappedDist * sin45 };
+  };
+
+  // true if segment a→b runs at 0/45/90°
+  const isOrthoSeg = (a: { x: number, y: number }, b: { x: number, y: number }) => {
+    const dx = Math.abs(b.x - a.x);
+    const dy = Math.abs(b.y - a.y);
+    const eps = 1e-4;
+    return dx < eps || dy < eps || Math.abs(dx - dy) < eps;
+  };
+
+  // Position for a dragged trace/cutout joint: prefers grid dots (or axis intersections) that keep
+  // BOTH adjacent segments orthogonal, falling back to constraining against a single neighbor.
+  const snapJoint = (points: { x: number, y: number }[], pi: number, raw: { x: number, y: number }) => {
+    const snapped = snapPt(raw);
+    if (!orthoMode) return snapped;
+    const neighbors = [points[pi - 1], points[pi + 1]].filter(Boolean);
+    if (neighbors.length === 0) return snapped;
+    const dist = (p: { x: number, y: number }) => Math.hypot(p.x - raw.x, p.y - raw.y);
+    const both: { x: number, y: number }[] = [];
+    const single: { x: number, y: number }[] = [];
+
+    if (snapEnabled) {
+      for (let i = -2; i <= 2; i++) {
+        for (let j = -2; j <= 2; j++) {
+          const c = { x: snapped.x + i * gridSize, y: snapped.y + j * gridSize };
+          const ok = neighbors.filter((n) => isOrthoSeg(n, c)).length;
+          if (ok === neighbors.length) both.push(c);
+          else if (ok > 0) single.push(c);
+        }
+      }
+    }
+    if (neighbors.length === 2) {
+      // intersections of the 0/45/90/135° axes through each neighbor (covers off-grid pad anchors)
+      const [a, b] = neighbors;
+      const axes = [0, 1, 2, 3].map((k) => ({ x: Math.cos((k * Math.PI) / 4), y: Math.sin((k * Math.PI) / 4) }));
+      for (const u of axes) {
+        for (const v of axes) {
+          const cross = u.x * v.y - u.y * v.x;
+          if (Math.abs(cross) < 1e-9) continue;
+          const t = ((b.x - a.x) * v.y - (b.y - a.y) * v.x) / cross;
+          both.push({ x: a.x + t * u.x, y: a.y + t * u.y });
+        }
+      }
+    }
+    for (const n of neighbors) single.push(snapOrtho(raw, n));
+
+    const pick = (arr: { x: number, y: number }[]) =>
+      arr.reduce<{ x: number, y: number } | null>((best, c) => (!best || dist(c) < dist(best) ? c : best), null);
+    const bestBoth = pick(both);
+    if (bestBoth && dist(bestBoth) <= gridSize * 1.5) return bestBoth;
+    return pick([...single, ...both]) ?? snapped;
   };
 
   // ---- element creation ----
@@ -370,7 +512,44 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
     e.stopPropagation();
     setSelectedId(el.id);
     const pt = back ? clientToMMBack(e.clientX, e.clientY) : clientToMM(e.clientX, e.clientY);
-    setDragging({ id: el.id, start: pt, orig: el, back, pointIndex });
+    // clicking (without dragging) on the body of an already-selected trace inserts a joint there
+    const insertOnClick = el.type === "trace" && pointIndex === null && el.id === selectedId;
+    setDragging({ id: el.id, start: pt, orig: el, back, pointIndex, insertOnClick, clientStart: { x: e.clientX, y: e.clientY } });
+  };
+
+  // insert a joint into the trace segment nearest to pt (grid-snapped when the dot lies on that segment)
+  const insertTracePoint = (id: string, pt: { x: number, y: number }) => {
+    setElements((prev) => prev.map((el) => {
+      if (el.id !== id || el.points.length < 2) return el;
+      let bestIdx = 0;
+      let bestDist = Infinity;
+      let bestProj = pt;
+      for (let i = 0; i < el.points.length - 1; i++) {
+        const a = el.points[i];
+        const b = el.points[i + 1];
+        const vx = b.x - a.x;
+        const vy = b.y - a.y;
+        const len2 = vx * vx + vy * vy;
+        const t = len2 === 0 ? 0 : Math.min(1, Math.max(0, ((pt.x - a.x) * vx + (pt.y - a.y) * vy) / len2));
+        const proj = { x: a.x + t * vx, y: a.y + t * vy };
+        const d = Math.hypot(pt.x - proj.x, pt.y - proj.y);
+        if (d < bestDist) { bestDist = d; bestIdx = i; bestProj = proj; }
+      }
+      const a = el.points[bestIdx];
+      const b = el.points[bestIdx + 1];
+      let newPt = bestProj;
+      const g = snapPt(bestProj);
+      const cross = (b.x - a.x) * (g.y - a.y) - (b.y - a.y) * (g.x - a.x);
+      const within = Math.min(a.x, b.x) - 1e-4 <= g.x && g.x <= Math.max(a.x, b.x) + 1e-4
+        && Math.min(a.y, b.y) - 1e-4 <= g.y && g.y <= Math.max(a.y, b.y) + 1e-4;
+      if (Math.abs(cross) < 1e-4 && within) newPt = g;
+      // don't duplicate an existing endpoint
+      if (Math.hypot(newPt.x - a.x, newPt.y - a.y) < 1e-4 || Math.hypot(newPt.x - b.x, newPt.y - b.y) < 1e-4) return el;
+      const points = [...el.points.slice(0, bestIdx + 1), newPt, ...el.points.slice(bestIdx + 1)];
+      // keep pad connections pointing at the same joints after the shift
+      const connections = (el.connections ?? []).map((c) => (c.pointIndex > bestIdx ? { ...c, pointIndex: c.pointIndex + 1 } : c));
+      return { ...el, points, connections };
+    }));
   };
 
   const onPointerMove = (e) => {
@@ -384,17 +563,7 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
     if ((orig.type === "trace" || orig.type === "cutout") && dragging.pointIndex !== null) {
       // single-joint drag with ortho constraint
       const pi = dragging.pointIndex;
-      const newPoints = orig.points.map((p: { x: number; y: number }, i: number) => {
-        if (i !== pi) return p;
-        const snapped = snapPt(pt);
-        if (orthoMode) {
-          const prev = orig.points[pi - 1];
-          const next = orig.points[pi + 1];
-          const anchor = prev ?? next;
-          return anchor ? snapOrtho(snapped, anchor) : snapped;
-        }
-        return snapped;
-      });
+      const newPoints = orig.points.map((p: { x: number; y: number }, i: number) => (i === pi ? snapJoint(orig.points, pi, pt) : p));
       updateElement(dragging.id, { points: newPoints });
       return;
     }
@@ -425,7 +594,12 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
     }
   };
 
-  const onPointerUp = () => setDragging(null);
+  const onPointerUp = (e) => {
+    if (dragging?.insertOnClick && Math.hypot(e.clientX - dragging.clientStart.x, e.clientY - dragging.clientStart.y) < 4) {
+      insertTracePoint(dragging.id, dragging.start);
+    }
+    setDragging(null);
+  };
 
   // ---- zoom + pan ----
 
@@ -523,7 +697,11 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
   const cuPath = (pts, closed) =>
     pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ") + (closed ? " Z" : "");
 
-  const layerColor = (layer, kind) => {
+  const layerColor = (layer, kind, colorKey?: string) => {
+    if (colorKey) {
+      const c = BOARD_COLORS.find((bc) => bc.key === colorKey);
+      if (c) return kind === "silk" ? c.fill : c.copper;
+    }
     if (kind === "silk") return layer === "top" ? "#f0f0e8" : "#d8d8d0";
     return boardColor.copper;
   };
@@ -538,6 +716,7 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
       {/* Header */}
       <Header
         right={null}
+        hideNav
         left={
           <>
             <div className="w-2.5 h-2.5 rounded-full" style={{ background: UI.accent }} />
@@ -562,110 +741,104 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
                 {projectName}
               </button>
             )}
+            <div className="w-px h-6 mx-1.5" style={{ background: UI.border }} />
+            {[
+              { label: "NEW", icon: FilePlus, onClick: handleNewProject },
+              { label: "IMPORT JSON", icon: FolderOpen, onClick: () => importInputRef.current?.click() },
+              { label: "EXPORT JSON", icon: Download, onClick: exportProject },
+              null,
+              { label: "MY PROJECTS", icon: BookOpen, onClick: () => navigate("/projects") },
+              { label: "GALLERY", icon: LayoutGrid, onClick: () => navigate("/gallery") },
+            ].map((item, i) =>
+              item === null ? (
+                <div key={i} className="w-px h-6 mx-1.5" style={{ background: UI.border }} />
+              ) : (
+                <button
+                  key={i}
+                  onClick={item.onClick}
+                  className="tb-btn flex items-center gap-2 px-3 py-2 rounded-md font-mono text-[15px] tracking-wide"
+                  style={{ background: "transparent", color: UI.textMuted, border: "none" }}
+                >
+                  <item.icon size={16} strokeWidth={2.25} />
+                  {item.label}
+                </button>
+              )
+            )}
+            <div className="w-px h-6 mx-1.5" style={{ background: UI.border }} />
+            {[
+              { title: "Undo (Ctrl+Z)", icon: Undo2, onClick: undo, enabled: undoStack.current.length > 0 },
+              { title: "Redo (Ctrl+Shift+Z)", icon: Redo2, onClick: redo, enabled: redoStack.current.length > 0 },
+            ].map((b) => (
+              <button
+                key={b.title}
+                title={b.title}
+                onClick={b.onClick}
+                disabled={!b.enabled}
+                className={`${b.enabled ? "tb-btn" : ""} flex items-center px-2 py-2 rounded-md`}
+                style={{ background: "transparent", color: UI.textMuted, opacity: b.enabled ? 1 : 0.3, border: "none", cursor: b.enabled ? "pointer" : "default" }}
+              >
+                <b.icon size={16} strokeWidth={2.25} />
+              </button>
+            ))}
+            <div className="w-px h-6 mx-1.5" style={{ background: UI.border }} />
+            <div className="flex items-center gap-2 font-mono text-[14px]" style={{ color: UI.textFaint }}>
+              <button
+                onClick={() => setShowDots((s) => !s)}
+                className="tb-chip px-3 py-1.5 rounded-md"
+                style={{
+                  background: showDots ? UI.bgChipOn : "transparent",
+                  color: showDots ? UI.accent : UI.textFaint,
+                  border: `1px solid ${UI.borderSub}`,
+                }}
+              >{showDots ? "DOTS ON" : "DOTS OFF"}</button>
+              <button
+                onClick={() => setSnapEnabled((s) => !s)}
+                className="tb-chip px-3 py-1.5 rounded-md"
+                style={{
+                  background: snapEnabled ? UI.bgChipOn : "transparent",
+                  color: snapEnabled ? UI.accent : UI.textFaint,
+                  border: `1px solid ${UI.borderSub}`,
+                }}
+              >{snapEnabled ? "SNAP ON" : "SNAP OFF"}</button>
+              <button
+                onClick={() => setOrthoMode((s) => !s)}
+                className="tb-chip px-3 py-1.5 rounded-md"
+                style={{
+                  background: orthoMode ? UI.bgChipOn : "transparent",
+                  color: orthoMode ? UI.accent : UI.textFaint,
+                  border: `1px solid ${UI.borderSub}`,
+                }}
+              >{orthoMode ? "ORTHO ON" : "ORTHO OFF"}</button>
+              {[2.54, 1.27].map((g) => (
+                <button
+                  key={g}
+                  onClick={() => { setGridSize(g); setSnapEnabled(true); }}
+                  className="tb-chip px-3 py-1.5 rounded-md"
+                  style={{
+                    background: snapEnabled && gridSize === g ? UI.accent : "transparent",
+                    color: snapEnabled && gridSize === g ? UI.accentText : UI.textFaint,
+                    border: `1px solid ${UI.borderSub}`,
+                  }}
+                >{g}mm</button>
+              ))}
+            </div>
+            <input
+              ref={importInputRef}
+              type="file" accept=".json" className="hidden"
+              onChange={(e) => { if (e.target.files?.[0]) { importProject(e.target.files[0]); e.target.value = ""; } }}
+            />
           </>
         }
       >
         <button
-          onClick={handleNewProject}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded font-mono text-[15px] tracking-wide"
-          style={{ background: UI.bgChipOn, color: UI.textMuted, border: `1px solid ${UI.borderSub}` }}
-        >
-          + NEW
-        </button>
-        <button
-          onClick={exportProject}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded font-mono text-[15px] tracking-wide"
-          style={{ background: UI.bgChipOn, color: UI.textMuted, border: `1px solid ${UI.borderSub}` }}
-        >
-          <Download size={13} strokeWidth={2.5} />
-          EXPORT JSON
-        </button>
-        <label
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded font-mono text-[15px] tracking-wide cursor-pointer"
-          style={{ background: UI.bgChipOn, color: UI.textMuted, border: `1px solid ${UI.borderSub}` }}
-        >
-          <FolderOpen size={13} strokeWidth={2.5} />
-          IMPORT JSON
-          <input
-            type="file" accept=".json" className="hidden"
-            onChange={(e) => { if (e.target.files?.[0]) { importProject(e.target.files[0]); e.target.value = ""; } }}
-          />
-        </label>
-        <button
           onClick={exportGerberZip}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded font-mono text-[15px] tracking-wide"
+          className="tb-cta flex items-center gap-2 px-4 py-2 rounded-md font-mono text-[15px] tracking-wide"
           style={{ background: UI.accent, color: UI.accentText }}
         >
-          <Download size={13} strokeWidth={2.5} />
+          <Download size={16} strokeWidth={2.25} />
           EXPORT GERBER
         </button>
       </Header>
-
-      {/* Second bar: layers, PCB color, grid */}
-      <div
-        className="flex items-center gap-2 px-4 py-2 border-b overflow-x-auto shrink-0"
-        style={{ borderColor: UI.border, background: UI.bgApp }}
-      >
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-[12px] tracking-widest" style={{ color: UI.textFaint }}>PCB Color</span>
-          {BOARD_COLORS.map((c) => (
-            <button
-              key={c.key}
-              title={c.label}
-              onClick={(e) => { setBoardColorKey(c.key); (e.currentTarget as HTMLButtonElement).blur() }}
-              className="w-7 h-5 rounded-sm border focus:outline-none"
-              style={{
-                background: c.fill,
-                borderColor: c.fill,
-                outline: boardColorKey === c.key ? `2px solid ${UI.textMuted}` : "none",
-                outlineOffset: "2px",
-              }}
-            />
-          ))}
-        </div>
-        <div className="ml-auto flex items-center gap-2 font-mono text-[12px]" style={{ color: UI.textFaint }}>
-          <span>GRID</span>
-          <button
-            onClick={() => setShowDots((s) => !s)}
-            className="px-2 py-1 rounded"
-            style={{
-              background: showDots ? UI.bgChipOn : "transparent",
-              color: showDots ? UI.accent : UI.textFaint,
-              border: `1px solid ${UI.borderSub}`,
-            }}
-          >{showDots ? "DOTS ON" : "DOTS OFF"}</button>
-          <button
-            onClick={() => setSnapEnabled((s) => !s)}
-            className="px-2 py-1 rounded"
-            style={{
-              background: snapEnabled ? UI.bgChipOn : "transparent",
-              color: snapEnabled ? UI.accent : UI.textFaint,
-              border: `1px solid ${UI.borderSub}`,
-            }}
-          >{snapEnabled ? "SNAP ON" : "SNAP OFF"}</button>
-          <button
-            onClick={() => setOrthoMode((s) => !s)}
-            className="px-2 py-1 rounded"
-            style={{
-              background: orthoMode ? UI.bgChipOn : "transparent",
-              color: orthoMode ? UI.accent : UI.textFaint,
-              border: `1px solid ${UI.borderSub}`,
-            }}
-          >{orthoMode ? "ORTHO ON" : "ORTHO OFF"}</button>
-          {[2.54, 1.27].map((g) => (
-            <button
-              key={g}
-              onClick={() => { setGridSize(g); setSnapEnabled(true); }}
-              className="px-2 py-1 rounded"
-              style={{
-                background: snapEnabled && gridSize === g ? UI.accent : "transparent",
-                color: snapEnabled && gridSize === g ? UI.accentText : UI.textFaint,
-                border: `1px solid ${UI.borderSub}`,
-              }}
-            >{g}mm</button>
-          ))}
-        </div>
-      </div>
 
       <div className="flex flex-1 min-h-0 relative">
         {/* Tool rail â€" floating */}
@@ -868,17 +1041,7 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
                 const orig = dragging.orig;
                 if ((orig.type === "trace" || orig.type === "cutout") && dragging.pointIndex !== null) {
                   const pi = dragging.pointIndex;
-                  const newPoints = orig.points.map((p: { x: number; y: number }, i: number) => {
-                    if (i !== pi) return p;
-                    const snapped = snapPt(pt);
-                    if (orthoMode) {
-                      const prev = orig.points[pi - 1];
-                      const next = orig.points[pi + 1];
-                      const anchor = prev ?? next;
-                      return anchor ? snapOrtho(snapped, anchor) : snapped;
-                    }
-                    return snapped;
-                  });
+                  const newPoints = orig.points.map((p: { x: number; y: number }, i: number) => (i === pi ? snapJoint(orig.points, pi, pt) : p));
                   updateElement(dragging.id, { points: newPoints });
                   return;
                 }
@@ -986,6 +1149,52 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
               </g>
             </svg>
           </div>
+        </div>
+
+        {/* Color panel - floating top left, next to the tool rail */}
+        <div
+          className="absolute left-20 top-4 z-20 flex items-center gap-2 px-3 py-2 rounded-xl"
+          style={{
+            background: UI.bgPanel,
+            border: `1px solid ${UI.border}`,
+            boxShadow: "0 8px 32px 0 rgba(0,0,0,0.6)",
+          }}
+        >
+          <span className="font-mono text-[12px] tracking-widest" style={{ color: UI.textFaint }}>
+            {selectedColorable ? "Color" : "PCB Color"}
+          </span>
+          {BOARD_COLORS.map((c) => (
+            <button
+              key={c.key}
+              title={c.label}
+              onClick={(e) => {
+                if (selectedColorable) updateElement(selected.id, { color: c.key });
+                else setBoardColorKey(c.key);
+                (e.currentTarget as HTMLButtonElement).blur()
+              }}
+              className="border focus:outline-none"
+              style={{
+                // swatch mirrors the board's aspect ratio and corner radius
+                height: 28,
+                width: (28 * board.width) / board.height,
+                borderRadius: Math.max(4, (28 * board.corner * 2.5) / board.height),
+                background: c.fill,
+                borderColor: c.fill,
+                outline: (selectedColorable ? selected.color === c.key : boardColorKey === c.key) ? `2px solid ${UI.textMuted}` : "none",
+                outlineOffset: "2px",
+              }}
+            />
+          ))}
+          {selectedColorable && selected.color && (
+            <button
+              title="Clear color override"
+              onClick={() => updateElement(selected.id, { color: undefined })}
+              className="font-mono text-[11px] px-2 py-1 rounded"
+              style={{ color: UI.textFaint, border: `1px solid ${UI.borderSub}`, background: "transparent" }}
+            >
+              RESET
+            </button>
+          )}
         </div>
 
         {/* Zoom control - bottom center floating */}
@@ -1142,7 +1351,7 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
           <path
             d={cuPath(el.points, false)}
             fill="none"
-            stroke={layerColor(el.layer, "copper")}
+            stroke={layerColor(el.layer, "copper", el.color)}
             strokeWidth={el.width}
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -1193,7 +1402,7 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
           y={el.y}
           fontSize={el.size}
           fontFamily={font.css}
-          fill={layerColor(el.layer, "silk")}
+          fill={layerColor(el.layer, "silk", el.color)}
           onPointerDown={(e) => startDrag(e, el, isBack)}
           onClick={(e) => { if (tool === "select") e.stopPropagation(); }}
           onContextMenu={onRMB}
@@ -1223,7 +1432,8 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
     if (el.type === "hole") {
       return (
         <g key={el.id} onPointerDown={(e) => startDrag(e, el, isBack)} onClick={(e) => { if (tool === "select") e.stopPropagation(); }} onContextMenu={onRMB} style={{ cursor: tool === "select" ? "move" : "inherit" }}>
-          <circle cx={el.x} cy={el.y} r={el.diameter / 2} fill="#18191b" stroke={el.plated ? boardColor.copper : "#6b6e71"}
+          <circle cx={el.x} cy={el.y} r={el.diameter / 2} fill="#18191b"
+            stroke={el.color ? layerColor(null, "silk", el.color) : el.plated ? boardColor.copper : "#6b6e71"}
             strokeWidth={0.25} {...strokeSel} />
         </g>
       );

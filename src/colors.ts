@@ -1,20 +1,20 @@
 // UI chrome palette — medium grey + grapefruit
 export const UI = {
   // backgrounds
-  bgApp:       "#2e2e2e",
-  bgPanel:     "#3a3a3a",
-  bgCanvas:    "#262626",
-  bgInput:     "#323232",
-  bgChipOn:    "#444444",
+  bgApp:       "#383838",
+  bgPanel:     "#444444",
+  bgCanvas:    "#323232",
+  bgInput:     "#3c3c3c",
+  bgChipOn:    "#4e4e4e",
 
   // borders
-  border:      "#4a4a4a",
-  borderSub:   "#404040",
+  border:      "#555555",
+  borderSub:   "#4a4a4a",
 
   // text
   textPrimary: "#ede9e4",
   textMuted:   "#b0a89e",
-  textFaint:   "#706860",
+  textFaint:   "#7e766e",
 
   // accent — grapefruit orange
   accent:      "#e8623a",
