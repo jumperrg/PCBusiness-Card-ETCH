@@ -9,7 +9,7 @@ const THUMB_WIDTH = 340
 // standalone thumbnail we instead crop tightly to the board's own bounding
 // box with no padding, so the board fills the thumbnail edge-to-edge like
 // a card photo.
-export async function svgToThumbnail(svg: SVGSVGElement): Promise<string> {
+export async function svgToThumbnail(svg: SVGSVGElement, outWidth = THUMB_WIDTH): Promise<string> {
   const clone = svg.cloneNode(true) as SVGSVGElement
   clone.removeAttribute('width')
   clone.removeAttribute('height')
@@ -18,7 +18,7 @@ export async function svgToThumbnail(svg: SVGSVGElement): Promise<string> {
   // children of <svg>), not an ancestor — so the board's on-screen position
   // has to come from the <g data-board-group> that actually draws the board,
   // marked explicitly since it can't be found by walking up from the clipPath.
-  const boardClipRect = svg.querySelector<SVGRectElement>('clipPath#boardClip rect')
+  const boardClipRect = svg.querySelector<SVGRectElement>('clipPath[id^="boardClip"] rect')
   const boardGroup = svg.querySelector<SVGGElement>('g[data-board-group]')
   let width: number
   let height: number
@@ -75,9 +75,9 @@ export async function svgToThumbnail(svg: SVGSVGElement): Promise<string> {
       image.src = url
     })
 
-    const scale = THUMB_WIDTH / width
+    const scale = outWidth / width
     const canvas = document.createElement('canvas')
-    canvas.width = THUMB_WIDTH
+    canvas.width = outWidth
     canvas.height = Math.round(height * scale)
     const ctx = canvas.getContext('2d')
     if (!ctx) throw new Error('Canvas 2D context unavailable')

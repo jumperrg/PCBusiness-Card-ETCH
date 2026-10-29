@@ -1,0 +1,197 @@
+/* ── Order / checkout page (paper theme, extends .landing.home) ── */
+
+.home.order-page { min-height: 100vh; display: flex; flex-direction: column; }
+.home.order-page > .lfooter { margin-top: auto; }
+
+.order-header {
+  width: 100%; max-width: 1180px; margin: 0 auto;
+  padding: 48px 24px 8px;
+}
+
+.order-layout {
+  width: 100%; max-width: 1180px; margin: 0 auto;
+  padding: 24px 24px 72px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 48px;
+  align-items: start;
+}
+
+/* ── 3D preview ── */
+.order-preview { position: sticky; top: 100px; }
+
+.order-stage {
+  position: relative;
+  padding: 56px 40px 20px;
+  display: flex; flex-direction: column; align-items: center;
+}
+.order-scene {
+  width: min(460px, 100%);
+  perspective: 1400px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  position: relative; z-index: 1;
+}
+.order-scene:active { cursor: grabbing; }
+
+.order-card {
+  position: relative; width: 100%; height: 100%;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+.order-face, .order-edge {
+  position: absolute; inset: 0;
+  overflow: hidden;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.order-face img, .order-face svg { display: block; width: 100%; height: 100%; object-fit: fill; pointer-events: none; }
+.order-face.front { transform: translateZ(4px); box-shadow: inset 0 0 0 1px rgba(0,0,0,0.12); }
+.order-face.back  { transform: rotateY(180deg) translateZ(4px); box-shadow: inset 0 0 0 1px rgba(0,0,0,0.12); }
+/* stacked FR4 slices give the board its 1.6 mm edge */
+.order-edge { backface-visibility: visible; -webkit-backface-visibility: visible; background: #b9a86f; }
+.order-edge:nth-child(even) { background: #a8975e; }
+.order-edge.is-light { background: #d3cfbf; }
+.order-edge.is-light:nth-child(even) { background: #c4bfad; }
+
+.order-floor-shadow {
+  width: min(380px, 80%); height: 34px; margin-top: 34px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(40, 36, 30, 0.28), transparent);
+  filter: blur(4px);
+}
+
+.order-stage-controls {
+  display: flex; align-items: center; gap: 8px; margin-top: 18px;
+  font-family: var(--lmono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+}
+.landing .order-stage-controls button {
+  background: #fff; color: var(--ltext-muted);
+  border: 1px solid var(--lborder); border-radius: 999px;
+  padding: 6px 14px; font: inherit; letter-spacing: inherit;
+}
+.landing .order-stage-controls button:hover { color: var(--ltext); border-color: var(--ltext-faint); }
+.order-hint { display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; color: var(--ltext-faint); }
+
+.order-spec {
+  margin: 8px auto 0; max-width: 460px;
+  background: rgba(255,255,255,0.8); border: 1px solid var(--lborder); border-radius: 12px;
+  padding: 16px 20px;
+}
+.order-spec-title {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  color: var(--ltext); font-weight: 600; font-size: 16px; margin-bottom: 10px;
+}
+.order-spec dl { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 20px; margin: 0; }
+.order-spec dl > div { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; }
+.order-spec dt { color: var(--ltext-faint); font-family: var(--lmono); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; padding-top: 2px; }
+.order-spec dd { margin: 0; color: var(--ltext); display: inline-flex; align-items: center; gap: 6px; }
+.order-swatch { width: 11px; height: 11px; border-radius: 3px; display: inline-block; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.15); }
+
+.landing .order-link {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: none; padding: 0;
+  color: var(--laccent); font-size: 13px; font-weight: 600;
+}
+.landing .order-link:hover { color: var(--laccent-dk); text-decoration: underline; }
+
+/* ── form panel ── */
+.order-panel {
+  background: #fff;
+  border: 1px solid var(--lborder);
+  border-radius: 16px;
+  padding: 28px 28px 32px;
+  box-shadow: 0 1px 2px rgba(40,36,30,0.05), 0 20px 40px -24px rgba(40,36,30,0.25);
+}
+.order-panel fieldset { border: none; margin: 0 0 26px; padding: 0; min-width: 0; }
+.order-panel legend {
+  padding: 0; margin-bottom: 12px;
+  font-family: var(--lmono); font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--ltext);
+}
+
+.order-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.order-grid .span-2 { grid-column: span 2; }
+
+.order-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.order-label { font-size: 13px; color: var(--ltext-muted); font-weight: 500; }
+.order-input { display: block; }
+.order-input input {
+  width: 100%; box-sizing: border-box;
+  height: 42px; padding: 0 12px;
+  font: inherit; font-size: 15px; color: var(--ltext);
+  background: #f7f6f2;
+  border: 1px solid var(--lborder); border-radius: 8px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+.order-input input::placeholder { color: #b3b6ba; }
+.order-input input:focus { background: #fff; border-color: var(--laccent); box-shadow: 0 0 0 3px rgba(232, 98, 58, 0.16); }
+.order-field.has-error .order-input input { border-color: #c0392b; background: #fdf6f5; }
+.order-error { font-size: 12px; color: #c0392b; }
+
+/* quantity & payment option tiles */
+.order-qty { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.order-qty-opt, .order-pay-opt {
+  position: relative;
+  border: 1px solid var(--lborder); border-radius: 10px;
+  background: #f7f6f2;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+.order-qty-opt input, .order-pay-opt input { position: absolute; opacity: 0; pointer-events: none; }
+.order-qty-opt:hover, .order-pay-opt:hover { border-color: var(--ltext-faint); }
+.order-qty-opt.is-on, .order-pay-opt.is-on {
+  border-color: var(--laccent); background: #fff;
+  box-shadow: 0 0 0 1px var(--laccent);
+}
+.order-qty-opt:has(input:focus-visible), .order-pay-opt:has(input:focus-visible) { box-shadow: 0 0 0 3px rgba(232, 98, 58, 0.3); }
+.order-qty-opt { display: flex; flex-direction: column; align-items: center; padding: 10px 6px; }
+.order-qty-opt b { color: var(--ltext); font-size: 17px; }
+.order-qty-opt span { font-family: var(--lmono); font-size: 12px; color: var(--ltext-faint); }
+
+.order-pay { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+.order-pay-opt {
+  height: 52px; display: flex; align-items: center; justify-content: center; gap: 8px;
+  color: var(--ltext); font-weight: 600; font-size: 15px;
+}
+
+.order-note { font-size: 14px; color: var(--ltext-muted); margin: 10px 0 0 !important; }
+
+.order-summary {
+  border-top: 1px dashed var(--lborder);
+  padding-top: 16px; margin-bottom: 20px;
+  display: flex; flex-direction: column; gap: 6px;
+  font-size: 14px;
+}
+.order-summary > div { display: flex; justify-content: space-between; }
+.order-total { color: var(--ltext); font-weight: 700; font-size: 17px; padding-top: 6px; }
+
+.landing .order-submit {
+  width: 100%;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 15px 20px; font-size: 14px;
+}
+.landing .order-submit:disabled { opacity: 0.7; cursor: progress; transform: none; }
+
+.order-success { text-align: center; padding: 40px 12px; color: var(--ltext-muted); }
+.order-success svg { color: #0b8a4c; }
+.order-success h3 { font-size: 24px; margin: 12px 0 10px !important; font-weight: 700 !important; }
+.order-success p { margin: 0 0 6px !important; }
+.order-success b { color: var(--ltext); }
+.order-success .btn-primary { margin-top: 20px; }
+
+@media (max-width: 900px) {
+  .order-layout { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-left: 16px; padding-right: 16px; }
+  .order-preview { position: static; }
+  .order-stage { padding: 32px 12px 8px; }
+  .order-header { padding: 32px 16px 0; }
+}
+@media (max-width: 520px) {
+  .order-panel { padding: 20px 16px 24px; }
+  .order-grid { grid-template-columns: minmax(0, 1fr); }
+  .order-grid .span-2 { grid-column: auto; }
+  .order-qty { grid-template-columns: repeat(2, 1fr); }
+  .order-spec dl { grid-template-columns: minmax(0, 1fr); }
+}

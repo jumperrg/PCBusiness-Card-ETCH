@@ -43,8 +43,7 @@ const PARTS: [number, number, number, 'r' | 'c' | 'led'][] = [
 const STEPS = [
   { title: 'Design', desc: 'Place text, traces, pads and vias. Then pick a board color.' },
   { title: 'Preview', desc: 'Toggle copper, silkscreen and mask layers for an accurate render of the finished board.' },
-  { title: 'Export', desc: 'Download Gerbers that every major PCB fabricator accepts.' },
-  { title: 'Order', desc: 'Upload to JLCPCB, PCBWay or OSH Park. Five cards typically cost under $5.' },
+  { title: 'Order', desc: 'Order your cards straight from the editor — no Gerber files to export or upload.' },
 ]
 
 
@@ -207,7 +206,7 @@ export default function LandingPage({ onStart, onGallery }: Props) {
       {/* HOW IT WORKS */}
       <section className="lsection" id="how-it-works">
         <div className="section-label">Process</div>
-        <h2>From idea to card in four steps</h2>
+        <h2>From idea to card in three steps</h2>
         <div className="steps">
           {STEPS.map((s, i) => (
             <div className="step" key={s.title}>
@@ -225,7 +224,6 @@ export default function LandingPage({ onStart, onGallery }: Props) {
 
       <footer className="lfooter">
         <span>ETCH — browser-based PCB business card designer</span>
-        <span className="footer-tag">No account required</span>
       </footer>
     </div>
   )

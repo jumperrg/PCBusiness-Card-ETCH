@@ -5,7 +5,7 @@ import { svgToThumbnail } from "./thumbnail";
 import JSZip from "jszip";
 import { exportGerber } from "./gerberExport";
 import { parseGerber, guessColor } from "./GerberViewer";
-import { openGerberPreview, navigate } from "./App";
+import { openGerberPreview, openOrder, navigate } from "./App";
 import Header from "./Header";
 import {
   MousePointer2,
@@ -26,9 +26,23 @@ import {
   ChevronUp,
   Undo2,
   Redo2,
+  FileArchive,
+  ShoppingCart,
 } from "lucide-react";
 
 // ---- constants -------------------------------------------------------
+
+// editor top bar palette — light-on-color, used over the gradient header
+const HB = {
+  textStrong: "#ffffff",
+  text: "rgba(255, 255, 255, 0.9)",
+  textDim: "rgba(255, 255, 255, 0.65)",
+  sep: "rgba(255, 255, 255, 0.25)",
+  chipOn: "rgba(255, 255, 255, 0.2)",
+  chipBorder: "rgba(255, 255, 255, 0.3)",
+  chipBorderOn: "rgba(255, 255, 255, 0.55)",
+  ink: "#26305a", // dark text on the white "selected" chip
+};
 
 const MM_TO_PX = 3.7795; // 96 DPI: 1mm = 96/25.4 px
 const LAYERS = [
@@ -199,6 +213,15 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
     }
     const saved = saveProject(projectName, currentProject(), projectId, thumbnail);
     setProjectId(saved.id);
+  };
+
+  // Rasterize both sides at print-preview resolution and hand them to the order page.
+  const startOrder = async () => {
+    const snap = async (svg: SVGSVGElement | null) => {
+      try { return svg ? await svgToThumbnail(svg, 1200) : undefined; } catch { return undefined; }
+    };
+    const [front, back] = await Promise.all([snap(svgRef.current), snap(svgBackRef.current)]);
+    openOrder({ name: projectName, project: { ...currentProject(), id: projectId, name: projectName }, front, back });
   };
 
   // ---- autosave: debounce 0.5s after any change to name, board, color, or elements ----
@@ -717,11 +740,13 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
       <Header
         right={null}
         hideNav
+        // solder-mask teal → cobalt → violet, left to right (mid-tone so light text reads well)
+        background="linear-gradient(90deg, #2f7d73 0%, #3a62a3 50%, #6a4a9e 100%)"
         left={
           <>
-            <div className="w-2.5 h-2.5 rounded-full" style={{ background: UI.accent }} />
-            <span className="font-mono tracking-widest text-[15px] cursor-pointer" style={{ color: UI.textMuted }} onClick={() => navigate('/')}>ETCH</span>
-            <span style={{ color: UI.textFaint, fontSize: 14 }}>/</span>
+            <div className="w-2.5 h-2.5 rounded-full" style={{ background: HB.textStrong, boxShadow: "0 0 8px rgba(255, 255, 255, 0.6)" }} />
+            <span className="font-mono tracking-widest text-[15px] cursor-pointer" style={{ color: HB.text }} onClick={() => navigate('/')}>ETCH</span>
+            <span style={{ color: HB.textDim, fontSize: 14 }}>/</span>
             {editingName ? (
               <input
                 autoFocus
@@ -730,41 +755,42 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
                 onBlur={commitName}
                 onKeyDown={e => { if (e.key === 'Enter') commitName(); if (e.key === 'Escape') setEditingName(false); }}
                 className="font-mono text-[14px] bg-transparent border-b outline-none px-1"
-                style={{ color: UI.textPrimary, borderColor: UI.accent, width: Math.max(120, nameInput.length * 8) }}
+                style={{ color: HB.textStrong, borderColor: HB.textStrong, width: Math.max(120, nameInput.length * 8) }}
               />
             ) : (
               <button
                 onClick={() => { setNameInput(projectName); setEditingName(true); }}
                 className="font-mono text-[14px] hover:underline"
-                style={{ color: UI.textFaint, background: 'none', border: 'none', cursor: 'text' }}
+                style={{ color: HB.textDim, background: 'none', border: 'none', cursor: 'text' }}
               >
                 {projectName}
               </button>
             )}
-            <div className="w-px h-6 mx-1.5" style={{ background: UI.border }} />
+            <div className="w-px h-6 mx-1.5" style={{ background: HB.sep }} />
             {[
               { label: "NEW", icon: FilePlus, onClick: handleNewProject },
               { label: "IMPORT JSON", icon: FolderOpen, onClick: () => importInputRef.current?.click() },
               { label: "EXPORT JSON", icon: Download, onClick: exportProject },
+              { label: "EXPORT GERBER", icon: FileArchive, onClick: exportGerberZip },
               null,
               { label: "MY PROJECTS", icon: BookOpen, onClick: () => navigate("/projects") },
               { label: "GALLERY", icon: LayoutGrid, onClick: () => navigate("/gallery") },
             ].map((item, i) =>
               item === null ? (
-                <div key={i} className="w-px h-6 mx-1.5" style={{ background: UI.border }} />
+                <div key={i} className="w-px h-6 mx-1.5" style={{ background: HB.sep }} />
               ) : (
                 <button
                   key={i}
                   onClick={item.onClick}
                   className="tb-btn flex items-center gap-2 px-3 py-2 rounded-md font-mono text-[15px] tracking-wide"
-                  style={{ background: "transparent", color: UI.textMuted, border: "none" }}
+                  style={{ background: "transparent", color: HB.text, border: "none" }}
                 >
                   <item.icon size={16} strokeWidth={2.25} />
                   {item.label}
                 </button>
               )
             )}
-            <div className="w-px h-6 mx-1.5" style={{ background: UI.border }} />
+            <div className="w-px h-6 mx-1.5" style={{ background: HB.sep }} />
             {[
               { title: "Undo (Ctrl+Z)", icon: Undo2, onClick: undo, enabled: undoStack.current.length > 0 },
               { title: "Redo (Ctrl+Shift+Z)", icon: Redo2, onClick: redo, enabled: redoStack.current.length > 0 },
@@ -775,38 +801,38 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
                 onClick={b.onClick}
                 disabled={!b.enabled}
                 className={`${b.enabled ? "tb-btn" : ""} flex items-center px-2 py-2 rounded-md`}
-                style={{ background: "transparent", color: UI.textMuted, opacity: b.enabled ? 1 : 0.3, border: "none", cursor: b.enabled ? "pointer" : "default" }}
+                style={{ background: "transparent", color: HB.text, opacity: b.enabled ? 1 : 0.35, border: "none", cursor: b.enabled ? "pointer" : "default" }}
               >
                 <b.icon size={16} strokeWidth={2.25} />
               </button>
             ))}
-            <div className="w-px h-6 mx-1.5" style={{ background: UI.border }} />
-            <div className="flex items-center gap-2 font-mono text-[14px]" style={{ color: UI.textFaint }}>
+            <div className="w-px h-6 mx-1.5" style={{ background: HB.sep }} />
+            <div className="flex items-center gap-2 font-mono text-[14px]">
               <button
                 onClick={() => setShowDots((s) => !s)}
                 className="tb-chip px-3 py-1.5 rounded-md"
                 style={{
-                  background: showDots ? UI.bgChipOn : "transparent",
-                  color: showDots ? UI.accent : UI.textFaint,
-                  border: `1px solid ${UI.borderSub}`,
+                  background: showDots ? HB.chipOn : "transparent",
+                  color: showDots ? HB.textStrong : HB.textDim,
+                  border: `1px solid ${showDots ? HB.chipBorderOn : HB.chipBorder}`,
                 }}
               >{showDots ? "DOTS ON" : "DOTS OFF"}</button>
               <button
                 onClick={() => setSnapEnabled((s) => !s)}
                 className="tb-chip px-3 py-1.5 rounded-md"
                 style={{
-                  background: snapEnabled ? UI.bgChipOn : "transparent",
-                  color: snapEnabled ? UI.accent : UI.textFaint,
-                  border: `1px solid ${UI.borderSub}`,
+                  background: snapEnabled ? HB.chipOn : "transparent",
+                  color: snapEnabled ? HB.textStrong : HB.textDim,
+                  border: `1px solid ${snapEnabled ? HB.chipBorderOn : HB.chipBorder}`,
                 }}
               >{snapEnabled ? "SNAP ON" : "SNAP OFF"}</button>
               <button
                 onClick={() => setOrthoMode((s) => !s)}
                 className="tb-chip px-3 py-1.5 rounded-md"
                 style={{
-                  background: orthoMode ? UI.bgChipOn : "transparent",
-                  color: orthoMode ? UI.accent : UI.textFaint,
-                  border: `1px solid ${UI.borderSub}`,
+                  background: orthoMode ? HB.chipOn : "transparent",
+                  color: orthoMode ? HB.textStrong : HB.textDim,
+                  border: `1px solid ${orthoMode ? HB.chipBorderOn : HB.chipBorder}`,
                 }}
               >{orthoMode ? "ORTHO ON" : "ORTHO OFF"}</button>
               {[2.54, 1.27].map((g) => (
@@ -815,9 +841,9 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
                   onClick={() => { setGridSize(g); setSnapEnabled(true); }}
                   className="tb-chip px-3 py-1.5 rounded-md"
                   style={{
-                    background: snapEnabled && gridSize === g ? UI.accent : "transparent",
-                    color: snapEnabled && gridSize === g ? UI.accentText : UI.textFaint,
-                    border: `1px solid ${UI.borderSub}`,
+                    background: snapEnabled && gridSize === g ? HB.textStrong : "transparent",
+                    color: snapEnabled && gridSize === g ? HB.ink : HB.textDim,
+                    border: `1px solid ${snapEnabled && gridSize === g ? HB.textStrong : HB.chipBorder}`,
                   }}
                 >{g}mm</button>
               ))}
@@ -831,12 +857,12 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
         }
       >
         <button
-          onClick={exportGerberZip}
+          onClick={startOrder}
           className="tb-cta flex items-center gap-2 px-4 py-2 rounded-md font-mono text-[15px] tracking-wide"
-          style={{ background: UI.accent, color: UI.accentText }}
+          style={{ background: HB.textStrong, color: HB.ink, border: "none", fontWeight: 600 }}
         >
-          <Download size={16} strokeWidth={2.25} />
-          EXPORT GERBER
+          <ShoppingCart size={16} strokeWidth={2.25} />
+          ORDER
         </button>
       </Header>
 
@@ -1084,7 +1110,7 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
                 </clipPath>
               </defs>
               {/* no mirror — board, text, traces, in-progress */}
-              <g transform={`translate(${marginMM}, ${gapMM})`}>
+              <g data-board-group="true" transform={`translate(${marginMM}, ${gapMM})`}>
                 {/* board substrate */}
                 {layerVis.outline && (
                   <rect x={0} y={0} width={board.width} height={board.height} rx={board.corner} ry={board.corner}
@@ -1226,8 +1252,8 @@ export default function PCBCardEditor({ initialProject }: { initialProject?: PCB
         >
           <button
             onClick={() => setLayersOpen((o) => !o)}
-            className="flex items-center justify-center mt-1 py-1 rounded-lg transition"
-            style={{ color: UI.textFaint, fontSize: 16, border: `1px solid ${UI.borderSub}` }}
+            className="tb-btn flex items-center justify-center mt-1 mx-2 py-1 rounded-lg"
+            style={{ color: UI.textFaint, fontSize: 16, border: "none", background: "transparent" }}
           >{layersOpen ? "◂ hide" : "▸"}</button>
 
           <div className="flex flex-col gap-0.5 p-2">

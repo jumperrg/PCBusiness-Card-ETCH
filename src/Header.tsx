@@ -15,6 +15,8 @@ interface Props {
   hideNav?: boolean
   /** Paper-style site nav used on the landing, gallery and projects pages. */
   light?: boolean
+  /** Overrides the dark bar's background (any CSS background value, e.g. a gradient). */
+  background?: string
 }
 
 function LightHeader({ active }: Pick<Props, 'active'>) {
@@ -44,12 +46,12 @@ function LightHeader({ active }: Pick<Props, 'active'>) {
   )
 }
 
-export default function Header({ active, left, children, right, hideNav, light }: Props) {
+export default function Header({ active, left, children, right, hideNav, light, background }: Props) {
   if (light) return <LightHeader active={active} />
   return (
     <div
       className="flex items-center justify-between px-4 py-2 border-b shrink-0"
-      style={{ borderColor: UI.border, background: UI.bgPanel }}
+      style={{ borderColor: UI.border, background: background ?? UI.bgPanel }}
     >
       <div className="flex items-center gap-3">
         {left ?? (

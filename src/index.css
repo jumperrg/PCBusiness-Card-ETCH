@@ -578,14 +578,14 @@ code {
   background: var(--code-bg);
 }
 
-/* ── Editor top bar hover states ── */
+/* ── Editor top bar hover states (light-on-color, over the gradient header) ── */
 .tb-btn, .tb-chip, .tb-cta {
   cursor: pointer;
-  transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease, filter 0.12s ease, transform 0.08s ease;
+  transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease, transform 0.08s ease;
 }
-.tb-btn:hover { background-color: rgba(40, 36, 30, 0.06) !important; color: #1d2126 !important; }
-.tb-chip:hover { border-color: #b9b4aa !important; filter: brightness(0.97); }
-.tb-cta:hover { filter: brightness(1.1); box-shadow: 0 0 0 3px rgba(232, 98, 58, 0.25); }
+.tb-btn:hover { background-color: rgba(255, 255, 255, 0.16) !important; color: #ffffff !important; }
+.tb-chip:hover { border-color: rgba(255, 255, 255, 0.8) !important; background-color: rgba(255, 255, 255, 0.12); }
+.tb-cta:hover { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.35), 0 4px 14px rgba(20, 24, 60, 0.35); }
 .tb-btn:active, .tb-chip:active, .tb-cta:active { transform: translateY(1px); }
 
 /* ── Editor canvas: drafting-paper dot grid ── */

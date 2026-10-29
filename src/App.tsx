@@ -4,6 +4,7 @@ import PCBCardEditor, { type PCBProject } from './pcb-card-editor'
 import GalleryPage from './GalleryPage'
 import ProjectsPage from './ProjectsPage'
 import GerberViewer, { type LoadedLayer } from './GerberViewer'
+import OrderPage, { ORDER_KEY, type OrderDesign } from './OrderPage'
 
 const SESSION_KEY = 'pcb:pending-project'
 const GERBER_PREVIEW_KEY = 'pcb:gerber-preview'
@@ -29,6 +30,12 @@ export function navigate(path: string) {
 export function openInEditor(project: PCBProject) {
   sessionStorage.setItem(SESSION_KEY, JSON.stringify(project))
   navigate('/editor')
+}
+
+export function openOrder(design: OrderDesign) {
+  // kept (not consumed) so a refresh of /order still shows the design
+  try { sessionStorage.setItem(ORDER_KEY, JSON.stringify(design)) } catch { /* quota: page falls back to saved projects */ }
+  navigate('/order')
 }
 
 export function openGerberPreview(layers: LoadedLayer[]) {
@@ -88,6 +95,8 @@ export default function App() {
       onOpenProject={openInEditor}
     />
   )
+
+  if (path === '/order') return <OrderPage />
 
   if (path === '/gerber-viewer') return (
     <GerberViewer

@@ -209,7 +209,10 @@
 .home .step { background: #fff; }
 .home .step-num { font-size: 13px; font-weight: 600; }
 
-.home .lfooter { border-top-color: var(--lborder); background: rgba(255,255,255,0.6); }
+.home .lfooter {
+  border-top: none; background: none;
+  padding: 28px max(24px, calc((100vw - 1100px) / 2 + 24px)) 32px;
+}
 
 @media (max-width: 1100px) {
   .desk-scene { --desk-scale: 0.78; height: 640px; }
@@ -235,7 +238,9 @@
 }
 
 /* ── Gallery / Projects on the paper theme ── */
-.home.gallery-page { min-height: 100vh; }
+.home.gallery-page { min-height: 100vh; display: flex; flex-direction: column; }
+.home.gallery-page > .lfooter { margin-top: auto; padding-left: max(24px, calc((100vw - 1100px) / 2 + 40px)); }
+.home.gallery-page > .gallery-header, .home.gallery-page > .gallery-grid { width: 100%; }
 .home .gallery-header { padding: 72px 40px 40px; }
 .home .gallery-grid { gap: 40px 32px; }
 .home .gallery-item { perspective: 900px; }

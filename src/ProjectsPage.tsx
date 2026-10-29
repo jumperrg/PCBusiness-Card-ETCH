@@ -158,7 +158,6 @@ export default function ProjectsPage({ onEdit, onOpenProject }: Props) {
 
       <footer className="lfooter">
         <span>ETCH — browser-based PCB business card designer</span>
-        <span className="footer-tag">No account required</span>
       </footer>
     </div>
   )
